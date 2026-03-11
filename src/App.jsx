@@ -1,104 +1,101 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const helmet = require("helmet");
-const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
-const dns = require("dns");
-dns.setDefaultResultOrder("ipv4first");
-dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
-require("dotenv").config();
+import { useState } from "react";
+import { useAuth } from "./hooks/useAuth";
+import { useTheme } from "./hooks/useTheme";
+import { useLang } from "./hooks/useLanguage";
+import { useNotifications } from "./hooks/useNotifications";
+import Dashboard from "./pages/Dashboard";
+import FaceAnalysis from "./pages/FaceAnalysis";
+import FitnessCoach from "./pages/FitnessCoach";
+import FashionAdvisor from "./pages/FashionAdvisor";
+import SettingsPage from "./pages/SettingsPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
+import AuthPage from "./pages/AuthPage";
 
-const authRoutes = require("./routes/auth");
-const faceRoutes = require("./routes/face");
-const fitnessRoutes = require("./routes/fitness");
-const fashionRoutes = require("./routes/fashion");
-const userRoutes = require("./routes/user");
+function ToastContainer({ toasts }) {
+  return (
+    <div style={{ position: "fixed", top: 20, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8 }}>
+      {toasts.map(toast => (
+        <div key={toast.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "12px 16px", boxShadow: "0 8px 24px rgba(0,0,0,0.3)", animation: "slideIn 0.3s ease", display: "flex", alignItems: "center", gap: 10, maxWidth: 280 }}>
+          <span style={{ fontSize: 20 }}>{toast.icon}</span>
+          <div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{toast.title}</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)" }}>{toast.body}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-const app = express();
+function AppShell() {
+  const [tab, setTab] = useState(0);
+  const [showPlans, setShowPlans] = useState(false);
+  const { t } = useLang();
+  const { theme, toggleTheme } = useTheme();
+  const { toasts } = useNotifications();
 
-// ── Security & Middleware ──────────────────────────────────────────────────────
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+  const tabs = [
+    { icon: "🏠", label: t.home },
+    { icon: "✨", label: t.face },
+    { icon: "💪", label: t.fitness },
+    { icon: "👗", label: t.fashion },
+    { icon: "⚙️", label: "Settings" },
+  ];
 
-app.use(cors({
-  origin: [
-    "http://localhost:3000",
-    "https://glowup-ai.vercel.app",
-    "capacitor://localhost",
-    "http://localhost",
-    /\.vercel\.app$/,
-  ],
-  credentials: true,
-}));
+  const pages = [
+    <Dashboard setTab={setTab} />,
+    <FaceAnalysis />,
+    <FitnessCoach />,
+    <FashionAdvisor />,
+    <SettingsPage />,
+  ];
 
-app.use(morgan("dev"));
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  return (
+    <div style={{ background: "var(--bg)", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
+      <style>{`@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+      <ToastContainer toasts={toasts} />
+      {showPlans && <SubscriptionPage onClose={() => setShowPlans(false)} />}
 
-// ── Rate Limiting ─────────────────────────────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: "Too many requests. Please try again later." },
-});
-const aiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: "AI request limit reached. Please wait a moment." },
-});
-app.use("/api/", limiter);
-app.use("/api/face", aiLimiter);
-app.use("/api/fashion", aiLimiter);
-app.use("/api/fitness", aiLimiter);
+      {/* Header */}
+      <div style={{ padding: "16px 20px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)", flexShrink: 0, paddingTop: "max(16px, env(safe-area-inset-top, 16px))" }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
+            Glow<span style={{ background: "var(--grad1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Up</span><span style={{ background: "var(--grad2)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}> AI</span>
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--muted)", letterSpacing: 0.5 }}>{t.appTagline}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div onClick={() => setShowPlans(true)} style={{ padding: "6px 12px", borderRadius: 20, cursor: "pointer", background: "linear-gradient(135deg, #FFD93D, #FF6B6B)", fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: "#fff", boxShadow: "0 3px 10px rgba(255,107,107,0.4)" }}>👑 Plans</div>
+          <div onClick={toggleTheme} style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16 }}>
+            {theme === "dark" ? "☀️" : "🌙"}
+          </div>
+        </div>
+      </div>
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/api/auth", authRoutes);
-app.use("/api/face", faceRoutes);
-app.use("/api/fitness", fitnessRoutes);
-app.use("/api/fashion", fashionRoutes);
-app.use("/api/user", userRoutes);
+      <div style={{ flex: 1, overflowY: "auto", paddingTop: 16 }}>{pages[tab]}</div>
 
-// ── Health Check ──────────────────────────────────────────────────────────────
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    service: "GlowUp AI API",
-  });
-});
+      {/* Bottom Nav */}
+      <div style={{ background: "rgba(10,10,15,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-around", alignItems: "center", padding: "8px 0 max(14px, env(safe-area-inset-bottom, 14px))", flexShrink: 0 }}>
+        {tabs.map((t, i) => (
+          <div key={i} onClick={() => setTab(i)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", padding: "4px 10px" }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tab === i ? "rgba(255,107,107,0.15)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, transition: "all 0.2s", border: tab === i ? "1.5px solid rgba(255,107,107,0.4)" : "1.5px solid transparent", transform: tab === i ? "scale(1.05)" : "scale(1)" }}>{t.icon}</div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 9, fontWeight: 600, color: tab === i ? "var(--accent)" : "var(--muted)", letterSpacing: 0.3 }}>{t.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-// ── 404 Handler ───────────────────────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
-});
-
-// ── Error Handler ─────────────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
-    error: err.message || "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
-});
-
-// ── Database & Start ──────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    family: 4,
-  })
-  .then(() => {
-    console.log("✅ MongoDB connected");
-    app.listen(PORT, "0.0.0.0", () =>
-      console.log(`🚀 GlowUp AI server running on port ${PORT}`)
-    );
-  })
-  .catch((err) => {
-    console.error("❌ MongoDB connection failed:", err.message);
-    process.exit(1);
-  });
-
-module.exports = app;
+export default function App() {
+  const { user, loading } = useAuth();
+  useTheme();
+  if (loading) return (
+    <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", flexDirection: "column", gap: 16 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 20, background: "var(--grad1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>✨</div>
+      <div style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 14 }}>Loading GlowUp AI...</div>
+    </div>
+  );
+  if (!user) return <AuthPage />;
+  return <AppShell />;
+}
