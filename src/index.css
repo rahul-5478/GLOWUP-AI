@@ -1,0 +1,64 @@
+:root {
+  --bg: #0A0A0F;
+  --surface: #13131A;
+  --card: #1C1C28;
+  --border: #2A2A3A;
+  --accent: #FF6B6B;
+  --accent2: #FFD93D;
+  --accent3: #6BCB77;
+  --accent4: #4D96FF;
+  --text: #F0F0FF;
+  --muted: #8888AA;
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --grad1: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%);
+  --grad2: linear-gradient(135deg, #4D96FF 0%, #845EF7 100%);
+  --grad3: linear-gradient(135deg, #6BCB77 0%, #4ECDC4 100%);
+  --grad4: linear-gradient(135deg, #FFD93D 0%, #FF6B6B 100%);
+}
+
+[data-theme="light"] {
+  --bg: #F8F8FF;
+  --surface: #EFEFFF;
+  --card: #FFFFFF;
+  --border: #E0E0F0;
+  --text: #1A1A2E;
+  --muted: #6666AA;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  transition: background 0.3s, color 0.3s;
+}
+
+#root { height: 100%; }
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+@keyframes bounce {
+  0%, 100% { transform: scale(0.7); opacity: 0.5; }
+  50% { transform: scale(1); opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+.fade-in-up { animation: fadeInUp 0.4s ease forwards; }
+.tab-content { animation: fadeInUp 0.3s ease; }
