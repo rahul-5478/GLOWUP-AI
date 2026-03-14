@@ -1,7 +1,6 @@
 import axios from "axios";
 
-
-const API_URL = "https://glowup-ai-backend.onrender.com/api";
+const API_URL = process.env.REACT_APP_API_URL || "https://glowup-ai-backend-1.onrender.com/api";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -21,7 +20,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("glowup_token");
       localStorage.removeItem("glowup_user");
-      window.location.href = "/login";
+      window.location.href = "/";
     }
     return Promise.reject(err);
   }
@@ -48,7 +47,6 @@ export const fashionAPI = {
   analyze: (imageBase64, occasion, mediaType = "image/jpeg") =>
     api.post("/fashion/analyze", { imageBase64, mediaType, occasion }),
   history: () => api.get("/fashion/history"),
-  wardrobeOutfit: (data) => api.post("/fashion/wardrobe", data),
 };
 
 export const skinAPI = {
@@ -62,8 +60,6 @@ export const chatAPI = {
 export const userAPI = {
   profile: () => api.get("/user/profile"),
   updateProfile: (data) => api.put("/user/profile", data),
-  analyses: (params) => api.get("/user/analyses", { params }),
-  deleteAnalysis: (id) => api.delete(`/user/analyses/${id}`),
 };
 
 export const paymentAPI = {

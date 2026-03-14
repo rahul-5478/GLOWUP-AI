@@ -1,137 +1,243 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { skinAPI } from "../utils/api";
-import { GlowButton, SectionTitle, Card, LoadingDots, ErrorMessage } from "../components/UI";
 
-const SKIN_TIPS = {
-  oily: ["Use oil-free moisturizer", "Wash face 2x daily", "Use salicylic acid cleanser"],
-  dry: ["Use heavy moisturizer", "Avoid hot showers", "Use hyaluronic acid serum"],
-  combination: ["Use gentle cleanser", "Moisturize dry areas only", "Use clay mask weekly"],
-  normal: ["Maintain current routine", "Use SPF daily", "Stay hydrated"],
-};
+const SKIN_TYPES = ["Oily", "Dry", "Combination", "Normal", "Sensitive"];
+const CONCERNS = ["Acne", "Dark Spots", "Pigmentation", "Dullness", "Dark Circles", "Oiliness", "Dryness", "Wrinkles", "Pores", "Uneven Tone"];
+const LIFESTYLES = ["Outdoor (lots of sun)", "Indoor (AC office)", "Active (sports)", "Stress (long hours)", "Normal"];
 
 export default function SkinAnalysis() {
-  const [image, setImage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [skinType, setSkinType] = useState("");
+  const [selectedConcerns, setSelectedConcerns] = useState([]);
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("male");
+  const [lifestyle, setLifestyle] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const fileRef = useRef();
 
-  const handleImage = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result);
-      setImage(reader.result.split(",")[1]);
-    };
-    reader.readAsDataURL(file);
+  const toggleConcern = (concern) => {
+    setSelectedConcerns(prev =>
+      prev.includes(concern) ? prev.filter(c => c !== concern) : [...prev, concern]
+    );
   };
 
   const analyze = async () => {
-    if (!image) return;
+    if (!skinType) return setError("Please select your skin type!");
     setLoading(true); setError(""); setResult(null);
     try {
-      const res = await skinAPI.analyze({ imageBase64: image });
+      const res = await skinAPI.analyze({
+        skinType,
+        skinConcerns: selectedConcerns.join(", "),
+        age,
+        gender,
+        lifestyle,
+        imageBase64: "text-analysis", // Backend ko satisfy karne ke liye
+      });
       setResult(res.data.result);
     } catch (err) {
-      setError(err.response?.data?.error || "Skin analysis failed. Please try again.");
+      setError(err.response?.data?.error || "Analysis failed. Please try again.");
     }
     setLoading(false);
   };
 
   return (
     <div style={{ padding: "0 16px 100px" }}>
-      <SectionTitle icon="🧴" title="Skin Analysis" subtitle="AI-powered skincare recommendations" />
-
-      <div onClick={() => fileRef.current.click()} style={{ background: "var(--card)", border: "2px dashed var(--border)", borderRadius: 20, padding: 24, textAlign: "center", cursor: "pointer", marginBottom: 16, position: "relative", overflow: "hidden" }}>
-        {preview ? (
-          <img src={preview} alt="skin" style={{ width: "100%", maxHeight: 280, objectFit: "cover", borderRadius: 14 }} />
-        ) : (
-          <div>
-            <div style={{ fontSize: 48, marginBottom: 10 }}>🤳</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--muted)" }}>Upload a clear face photo</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Good lighting = better analysis</div>
-          </div>
-        )}
-        <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: "none" }} />
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "var(--text)" }}>
+          💅 Skin Analysis
+        </div>
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
+          AI-powered personalized skincare routine
+        </div>
       </div>
 
-      <ErrorMessage message={error} />
-      <GlowButton onClick={analyze} disabled={!image} gradient="linear-gradient(135deg, #FF6B6B, #845EF7)">
-        🔍 Analyze My Skin
-      </GlowButton>
-
-      {loading && <Card style={{ marginTop: 16, textAlign: "center" }}><div style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 14, marginBottom: 8 }}>Analyzing your skin...</div><LoadingDots /></Card>}
-
-      {result && (
-        <div style={{ marginTop: 16 }}>
-          {/* Skin Score */}
-          <div style={{ background: "linear-gradient(135deg, rgba(132,94,247,0.15), rgba(255,107,107,0.15))", border: "1px solid rgba(132,94,247,0.3)", borderRadius: 20, padding: 20, marginBottom: 12, textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Skin Health Score</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 56, fontWeight: 700, background: "linear-gradient(135deg, #845EF7, #FF6B6B)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{result.score || 78}</div>
-            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>out of 100</div>
+      {!result ? (
+        <div>
+          {/* Gender */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>👤 Gender</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {["male", "female"].map(g => (
+                <div key={g} onClick={() => setGender(g)} style={{
+                  flex: 1, padding: "12px", textAlign: "center", borderRadius: 14,
+                  background: gender === g ? "var(--grad1)" : "var(--card)",
+                  border: `1.5px solid ${gender === g ? "transparent" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
+                  color: gender === g ? "#fff" : "var(--text)", cursor: "pointer",
+                }}>
+                  {g === "male" ? "👨 Male" : "👩 Female"}
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Skin Type & Tone */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-            <Card>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Skin Type</div>
-              <div style={{ fontSize: 28 }}>💧</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 4, textTransform: "capitalize" }}>{result.skinType || "Normal"}</div>
-            </Card>
-            <Card>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>Skin Tone</div>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: result.skinToneHex || "#C68642", border: "2px solid var(--border)", marginBottom: 4 }} />
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, color: "var(--text)", textTransform: "capitalize" }}>{result.skinTone || "Medium"}</div>
-            </Card>
+          {/* Age */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>🎂 Age</div>
+            <input
+              type="number"
+              value={age}
+              onChange={e => setAge(e.target.value)}
+              placeholder="Enter your age"
+              style={{ width: "100%", padding: "12px 16px", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+
+          {/* Skin Type */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>🧴 Skin Type</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {SKIN_TYPES.map(type => (
+                <div key={type} onClick={() => setSkinType(type)} style={{
+                  padding: "8px 16px", borderRadius: 20,
+                  background: skinType === type ? "var(--grad1)" : "var(--card)",
+                  border: `1.5px solid ${skinType === type ? "transparent" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
+                  color: skinType === type ? "#fff" : "var(--text)", cursor: "pointer",
+                }}>
+                  {type}
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Concerns */}
-          {result.concerns?.length > 0 && (
-            <Card style={{ marginBottom: 12 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>⚠️ Skin Concerns</div>
-              {result.concerns.map((c, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < result.concerns.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)" }}>{c}</span>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>⚠️ Skin Concerns (select all that apply)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {CONCERNS.map(concern => (
+                <div key={concern} onClick={() => toggleConcern(concern)} style={{
+                  padding: "8px 14px", borderRadius: 20,
+                  background: selectedConcerns.includes(concern) ? "rgba(255,107,107,0.15)" : "var(--card)",
+                  border: `1.5px solid ${selectedConcerns.includes(concern) ? "var(--accent)" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 12,
+                  color: selectedConcerns.includes(concern) ? "var(--accent)" : "var(--muted)",
+                  cursor: "pointer",
+                }}>
+                  {concern}
                 </div>
               ))}
-            </Card>
+            </div>
+          </div>
+
+          {/* Lifestyle */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 8 }}>🌞 Lifestyle</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {LIFESTYLES.map(l => (
+                <div key={l} onClick={() => setLifestyle(l)} style={{
+                  padding: "12px 16px", borderRadius: 14,
+                  background: lifestyle === l ? "rgba(255,107,107,0.1)" : "var(--card)",
+                  border: `1.5px solid ${lifestyle === l ? "var(--accent)" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 13,
+                  color: lifestyle === l ? "var(--accent)" : "var(--text)", cursor: "pointer",
+                }}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontFamily: "var(--font-body)", fontSize: 13, color: "var(--accent)" }}>
+              ⚠️ {error}
+            </div>
           )}
 
-          {/* Routine */}
-          <Card style={{ marginBottom: 12 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>🌅 Morning Routine</div>
-            {result.morningRoutine?.map((step, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < result.morningRoutine.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,107,107,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)" }}>{step}</span>
+          <button onClick={analyze} disabled={loading || !skinType} style={{
+            width: "100%", padding: "16px", border: "none", borderRadius: 16,
+            background: skinType ? "var(--grad1)" : "var(--surface)",
+            color: skinType ? "#fff" : "var(--muted)",
+            fontFamily: "var(--font-body)", fontWeight: 700, fontSize: 15,
+            cursor: skinType ? "pointer" : "default",
+          }}>
+            {loading ? "🔍 Analyzing your skin..." : "💅 Analyze My Skin"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          {/* Score Card */}
+          <div style={{ background: "linear-gradient(135deg, var(--card), var(--surface))", borderRadius: 20, padding: 20, border: "1px solid var(--border)", marginBottom: 14, textAlign: "center" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 48, fontWeight: 700, background: "var(--grad1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              {result.score}
+            </div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>Skin Health Score</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 10 }}>
+              <div style={{ background: "var(--surface)", borderRadius: 10, padding: "6px 12px", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--text)" }}>
+                {result.skinType} skin
               </div>
-            ))}
-          </Card>
+              <div style={{ background: result.skinToneHex || "#C68642", borderRadius: 10, padding: "6px 12px", fontFamily: "var(--font-body)", fontSize: 12, color: "#fff" }}>
+                {result.skinTone} tone
+              </div>
+            </div>
+          </div>
 
-          <Card style={{ marginBottom: 12 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>🌙 Night Routine</div>
-            {result.nightRoutine?.map((step, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < result.nightRoutine.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(132,94,247,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 11, color: "#845EF7", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-                <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)" }}>{step}</span>
+          {/* Concerns */}
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>⚠️ Detected Concerns</div>
+            {result.concerns?.map((c, i) => (
+              <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", padding: "4px 0" }}>• {c}</div>
+            ))}
+          </div>
+
+          {/* Morning Routine */}
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>☀️ Morning Routine</div>
+            {result.morningRoutine?.map((step, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "6px 0", alignItems: "flex-start" }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--grad1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{step}</div>
               </div>
             ))}
-          </Card>
+          </div>
+
+          {/* Night Routine */}
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>🌙 Night Routine</div>
+            {result.nightRoutine?.map((step, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, padding: "6px 0", alignItems: "flex-start" }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--grad3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{step}</div>
+              </div>
+            ))}
+          </div>
 
           {/* Products */}
-          <Card>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>🛍️ Recommended Products</div>
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>🛍️ Recommended Products</div>
             {result.products?.map((p, i) => (
-              <div key={i} style={{ background: "var(--surface)", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{p.name}</div>
+              <div key={i} style={{ background: "var(--surface)", borderRadius: 12, padding: "10px 12px", marginBottom: 8 }}>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{p.name}</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{p.reason}</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent3)", marginTop: 4 }}>{p.price}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginTop: 4 }}>{p.price}</div>
               </div>
             ))}
-          </Card>
+          </div>
+
+          {/* Diet Tips */}
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>🥗 Diet Tips</div>
+            {result.dietTips?.map((tip, i) => (
+              <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", padding: "4px 0" }}>• {tip}</div>
+            ))}
+          </div>
+
+          {/* Lifestyle */}
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 10 }}>✨ Lifestyle Tips</div>
+            {result.lifestyle?.map((tip, i) => (
+              <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", padding: "4px 0" }}>• {tip}</div>
+            ))}
+          </div>
+
+          <button onClick={() => { setResult(null); setSelectedConcerns([]); setSkinType(""); }} style={{
+            width: "100%", padding: 14, border: "none", borderRadius: 14,
+            background: "var(--surface)", color: "var(--muted)",
+            fontFamily: "var(--font-body)", fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}>
+            🔄 Analyze Again
+          </button>
         </div>
       )}
     </div>
