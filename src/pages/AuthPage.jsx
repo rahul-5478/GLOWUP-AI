@@ -1,138 +1,307 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { GlowButton, ErrorMessage } from "../components/UI";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState("login"); // login | register
+  const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { login, register } = useAuth();
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  useEffect(() => {
+    // Fade in animation on mount
+    const t = setTimeout(() => setMounted(true), 30);
+    return () => clearTimeout(t);
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const triggerShake = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
+  };
+
+  const handleSubmit = async () => {
     setError("");
+    if (!form.email || !form.password) {
+      setError("Email aur password zaroori hai!");
+      triggerShake();
+      return;
+    }
+    if (mode === "register" && !form.name) {
+      setError("Naam bhi daalo!");
+      triggerShake();
+      return;
+    }
     setLoading(true);
     try {
       if (mode === "login") {
         await login(form.email, form.password);
       } else {
-        if (!form.name) { setError("Name is required."); setLoading(false); return; }
         await register(form.name, form.email, form.password);
       }
-      // Navigation handled automatically by App.jsx — user state change triggers re-render
     } catch (err) {
-      setError(err.response?.data?.error || "Something went wrong. Please try again.");
+      const msg =
+        err.response?.data?.error ||
+        (mode === "login"
+          ? "Email ya password galat hai."
+          : "Account nahi bana. Try again.");
+      setError(msg);
+      triggerShake();
     }
     setLoading(false);
   };
 
-  const inputStyle = {
+  const switchMode = () => {
+    setMode((m) => (m === "login" ? "register" : "login"));
+    setError("");
+    setForm({ name: "", email: "", password: "" });
+  };
+
+  const inputBase = {
     width: "100%",
-    background: "#1C1C28",
-    border: "1px solid var(--border)",
+    background: "rgba(255,255,255,0.04)",
+    border: "1.5px solid var(--border2)",
     borderRadius: 14,
-    padding: "14px 16px",
+    padding: "13px 16px",
     color: "var(--text)",
     fontFamily: "var(--font-body)",
     fontSize: 15,
     outline: "none",
-    marginBottom: 12,
-    transition: "border-color 0.2s",
+    marginBottom: 11,
+    transition: "border-color 0.2s, box-shadow 0.2s",
   };
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "var(--bg)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "24px 20px",
-    }}>
-      {/* Logo */}
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: 22,
-          background: "var(--grad1)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 34, margin: "0 auto 16px",
-          boxShadow: "0 8px 30px rgba(255,107,107,0.4)",
-        }}>✨</div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: "var(--text)" }}>
-          Glow<span style={{ background: "var(--grad1)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Up</span>
-          <span style={{ background: "var(--grad2)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}> AI</span>
-        </div>
-        <p style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 14, marginTop: 6 }}>
-          Your AI-powered beauty companion
-        </p>
-      </div>
-
-      {/* Card */}
+    <div
+      className="mesh-bg"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 20px",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Ambient glow blobs */}
       <div style={{
-        width: "100%",
-        maxWidth: 400,
-        background: "var(--card)",
-        borderRadius: 24,
-        padding: 28,
-        border: "1px solid var(--border)",
+        position: "absolute", top: -120, left: -80, width: 320, height: 320,
+        borderRadius: "50%", pointerEvents: "none",
+        background: "radial-gradient(circle, rgba(255,77,109,0.12) 0%, transparent 70%)",
+      }} />
+      <div style={{
+        position: "absolute", bottom: -120, right: -80, width: 320, height: 320,
+        borderRadius: "50%", pointerEvents: "none",
+        background: "radial-gradient(circle, rgba(67,97,238,0.1) 0%, transparent 70%)",
+      }} />
+
+      <div style={{
+        width: "100%", maxWidth: 390,
+        opacity: mounted ? 1 : 0,
+        transform: mounted ? "translateY(0px)" : "translateY(20px)",
+        transition: "opacity 0.4s ease, transform 0.4s ease",
       }}>
-        {/* Tabs */}
-        <div style={{ display: "flex", background: "var(--surface)", borderRadius: 12, padding: 4, marginBottom: 24 }}>
-          {["login", "register"].map(m => (
-            <button key={m} onClick={() => { setMode(m); setError(""); }} style={{
-              flex: 1, padding: "10px", border: "none", borderRadius: 10, cursor: "pointer",
-              background: mode === m ? "var(--accent)" : "transparent",
-              color: mode === m ? "#fff" : "var(--muted)",
-              fontFamily: "var(--font-body)", fontWeight: 600, fontSize: 14, transition: "all 0.2s",
-            }}>{m === "login" ? "Sign In" : "Sign Up"}</button>
-          ))}
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            width: 68, height: 68, borderRadius: 20,
+            background: "var(--grad1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 30, margin: "0 auto 14px",
+            boxShadow: "0 8px 28px rgba(255,77,109,0.35)",
+            animation: "glowPulse 2.5s ease-in-out infinite",
+          }}>
+            ✨
+          </div>
+          <div style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 30, fontWeight: 800, lineHeight: 1, letterSpacing: -0.5,
+          }}>
+            Glow<span className="text-gradient-1">Up</span>
+            <span className="text-gradient-2"> AI</span>
+          </div>
+          <div style={{
+            fontFamily: "var(--font-body)", fontSize: 13,
+            color: "var(--muted)", marginTop: 6,
+          }}>
+            Your AI beauty & fitness coach
+          </div>
         </div>
 
-        <ErrorMessage message={error} />
+        {/* Card */}
+        <div style={{
+          background: "var(--card)",
+          borderRadius: 24, padding: "26px 22px",
+          border: "1px solid var(--border2)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          animation: shake ? "shakeX 0.4s ease" : "none",
+        }}>
+          {/* Mode tabs */}
+          <div className="tab-bar" style={{ marginBottom: 22 }}>
+            {["login", "register"].map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setError(""); setForm({ name: "", email: "", password: "" }); }}
+                className={`tab-btn ${mode === m ? "active" : ""}`}
+              >
+                {m === "login" ? "Sign In" : "Sign Up"}
+              </button>
+            ))}
+          </div>
 
-        <form onSubmit={handleSubmit}>
+          {/* Heading */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={{
+              fontFamily: "var(--font-display)", fontSize: 19,
+              fontWeight: 700, color: "var(--text)",
+            }}>
+              {mode === "login" ? "Welcome back! 👋" : "Naya account banao ✨"}
+            </div>
+            <div style={{
+              fontFamily: "var(--font-body)", fontSize: 12,
+              color: "var(--muted)", marginTop: 3,
+            }}>
+              {mode === "login"
+                ? "Login karo aur apna glow journey continue karo"
+                : "Free mein join karo aur AI se glow karo"}
+            </div>
+          </div>
+
+          {/* Inputs */}
           {mode === "register" && (
             <input
-              type="text"
-              placeholder="Full Name"
+              placeholder="Tumhara naam"
               value={form.name}
-              onChange={e => set("name", e.target.value)}
-              style={inputStyle}
+              onChange={(e) => set("name", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              style={inputBase}
+              onFocus={(e) => {
+                e.target.style.borderColor = "var(--accent)";
+                e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "var(--border2)";
+                e.target.style.boxShadow = "none";
+              }}
             />
           )}
           <input
             type="email"
             placeholder="Email address"
             value={form.email}
-            onChange={e => set("email", e.target.value)}
-            required
-            style={inputStyle}
+            onChange={(e) => set("email", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            style={inputBase}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--accent)";
+              e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--border2)";
+              e.target.style.boxShadow = "none";
+            }}
           />
           <input
             type="password"
             placeholder="Password"
             value={form.password}
-            onChange={e => set("password", e.target.value)}
-            required
-            style={{ ...inputStyle, marginBottom: 20 }}
+            onChange={(e) => set("password", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            style={{ ...inputBase, marginBottom: 0 }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--accent)";
+              e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--border2)";
+              e.target.style.boxShadow = "none";
+            }}
           />
-          <GlowButton type="submit" disabled={loading}>
-            {loading ? "Please wait..." : mode === "login" ? "✨ Sign In" : "🚀 Create Account"}
-          </GlowButton>
-        </form>
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              marginTop: 10, padding: "10px 14px",
+              background: "rgba(255,77,109,0.1)",
+              border: "1px solid rgba(255,77,109,0.3)",
+              borderRadius: 11,
+              fontFamily: "var(--font-body)", fontSize: 13, color: "var(--accent)",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="btn-primary"
+            style={{ marginTop: 16 }}
+          >
+            {loading ? (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <span style={{
+                  width: 16, height: 16,
+                  border: "2.5px solid rgba(255,255,255,0.3)",
+                  borderTopColor: "#fff",
+                  borderRadius: "50%",
+                  display: "inline-block",
+                  animation: "spin 0.75s linear infinite",
+                }} />
+                {mode === "login" ? "Logging in..." : "Creating account..."}
+              </span>
+            ) : (
+              mode === "login" ? "✨ Sign In" : "🚀 Create Account"
+            )}
+          </button>
+
+          {/* Switch link */}
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+              {mode === "login" ? "Account nahi hai? " : "Already account hai? "}
+            </span>
+            <span
+              onClick={switchMode}
+              style={{
+                fontFamily: "var(--font-body)", fontSize: 13,
+                color: "var(--accent)", fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {mode === "login" ? "Sign Up karo" : "Sign In karo"}
+            </span>
+          </div>
+        </div>
+
+        {/* Feature chips */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 22 }}>
+          {[["✨", "Face AI"], ["💪", "Fitness"], ["👗", "Fashion"], ["🧴", "Skin"]].map(([icon, label]) => (
+            <div key={label} style={{
+              background: "var(--card)", border: "1px solid var(--border)",
+              borderRadius: 20, padding: "5px 12px",
+              display: "flex", alignItems: "center", gap: 5,
+            }}>
+              <span style={{ fontSize: 13 }}>{icon}</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <p style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 13, marginTop: 24, textAlign: "center" }}>
-        {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-        <span onClick={() => setMode(mode === "login" ? "register" : "login")}
-          style={{ color: "var(--accent)", cursor: "pointer", fontWeight: 600 }}>
-          {mode === "login" ? "Sign Up" : "Sign In"}
-        </span>
-      </p>
+      <style>{`
+        @keyframes shakeX {
+          0%,100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-5px); }
+          80% { transform: translateX(5px); }
+        }
+      `}</style>
     </div>
   );
 }

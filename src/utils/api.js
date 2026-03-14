@@ -4,7 +4,7 @@ const API_URL = process.env.REACT_APP_API_URL || "https://glowup-ai-backend-1.on
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 35000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -20,11 +20,16 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("glowup_token");
       localStorage.removeItem("glowup_user");
-      window.location.href = "/";
+      window.location.reload();
     }
     return Promise.reject(err);
   }
 );
+
+// Render free tier ko jaagta rakhne ke liye — app open hote hi ping
+export const warmUpBackend = () => {
+  fetch(`${API_URL}/health`, { method: "GET" }).catch(() => {});
+};
 
 export const authAPI = {
   register: (data) => api.post("/auth/register", data),
@@ -33,8 +38,8 @@ export const authAPI = {
 };
 
 export const faceAPI = {
-  analyze: (imageBase64, mediaType = "image/jpeg") =>
-    api.post("/face/analyze", { imageBase64, mediaType }),
+  analyze: (imageBase64, mediaType = "image/jpeg", extra = {}) =>
+    api.post("/face/analyze", { imageBase64, mediaType, ...extra }),
   history: () => api.get("/face/history"),
 };
 
@@ -44,8 +49,7 @@ export const fitnessAPI = {
 };
 
 export const fashionAPI = {
-  analyze: (imageBase64, occasion, mediaType = "image/jpeg") =>
-    api.post("/fashion/analyze", { imageBase64, mediaType, occasion }),
+  analyze: (data) => api.post("/fashion/analyze", data),
   history: () => api.get("/fashion/history"),
 };
 
