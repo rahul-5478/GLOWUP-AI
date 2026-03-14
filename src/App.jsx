@@ -66,11 +66,58 @@ function AppShell() {
   useEffect(() => {
     const onboarded = localStorage.getItem("glowup_onboarded");
     if (!onboarded && user) {
-      // Small delay so app loads first
       const timer = setTimeout(() => setShowOnboarding(true), 800);
       return () => clearTimeout(timer);
     }
   }, [user]);
+
+  // ── Android Back Button Handler ──
+  useEffect(() => {
+    let backHandler = null;
+
+    const setupBackButton = async () => {
+      try {
+        const { App: CapApp } = await import("@capacitor/app");
+
+        backHandler = await CapApp.addListener("backButton", () => {
+          // Agar koi modal/popup open hai toh pehle usse band karo
+          if (showPayment) {
+            setShowPayment(false);
+            return;
+          }
+          if (showPlans) {
+            setShowPlans(false);
+            return;
+          }
+          if (showOnboarding) {
+            setShowOnboarding(false);
+            return;
+          }
+
+          // Agar Home pe nahi ho toh Home pe jao
+          if (tab !== 0) {
+            setTab(0);
+            return;
+          }
+
+          // Home pe hain — app band karo
+          CapApp.exitApp();
+        });
+      } catch (e) {
+        // Web browser mein Capacitor nahi hoga — ignore karo
+        console.log("Capacitor App plugin not available (web mode)");
+      }
+    };
+
+    setupBackButton();
+
+    // Cleanup on unmount
+    return () => {
+      if (backHandler) {
+        backHandler.remove();
+      }
+    };
+  }, [tab, showPayment, showPlans, showOnboarding]);
 
   const pages = [
     <Dashboard setTab={setTab} />,
