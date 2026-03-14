@@ -10,6 +10,14 @@ const GRADE_CONFIG = {
 const SEVERITY_COLOR = { Mild: "#4ade80", Moderate: "#facc15", Severe: "#f87171" };
 const STEP_ICONS = { Cleanser: "🧴", Toner: "💧", Serum: "✨", Moisturizer: "🌿", Sunscreen: "☀️", "Eye Cream": "👁️", Exfoliator: "🔄", Mask: "🎭", default: "💊" };
 
+// ── Helper: always returns an array ──────────────────────────────────────────
+const toArray = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") return val.split(",").map(s => s.trim()).filter(Boolean);
+  return [String(val)];
+};
+
 function toBase64(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -65,6 +73,8 @@ function ProductCard({ product, index }) {
   const [open, setOpen] = useState(index === 0);
   const icon = STEP_ICONS[product.category] || STEP_ICONS.default;
   const timeColor = product.timeOfDay === "Morning" ? "#facc15" : "#818cf8";
+  // ✅ Safe array for targetsProblems
+  const targets = toArray(product.targetsProblems);
   return (
     <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
       <div onClick={() => setOpen(!open)} style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
@@ -92,9 +102,9 @@ function ProductCard({ product, index }) {
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
               <span style={{ color: "#facc15", fontWeight: 600 }}>How to use: </span>{product.howToUse}
             </div>
-            {product.targetsProblems?.length > 0 && (
+            {targets.length > 0 && (
               <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {product.targetsProblems.map((p, i) => (
+                {targets.map((p, i) => (
                   <span key={i} style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "2px 8px", fontSize: 10, color: "#f87171" }}>🎯 {p}</span>
                 ))}
               </div>
@@ -110,6 +120,12 @@ function WeekCard({ weekNum, weekData }) {
   const [open, setOpen] = useState(weekNum === "week1");
   const colors = ["#60a5fa", "#a78bfa", "#34d399", "#f97316"];
   const col = colors[["week1","week2","week3","week4"].indexOf(weekNum)] || colors[0];
+
+  // ✅ Safe arrays — handles string, array, undefined, null
+  const morningItems = toArray(weekData?.morning);
+  const nightItems   = toArray(weekData?.night);
+  const avoidItems   = toArray(weekData?.avoid);
+
   return (
     <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${col}30`, borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
       <div onClick={() => setOpen(!open)} style={{ padding: 16, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -124,22 +140,28 @@ function WeekCard({ weekNum, weekData }) {
       {open && weekData && (
         <div style={{ padding: "0 16px 16px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
           <div style={{ paddingTop: 12, display: "grid", gap: 12 }}>
-            {weekData.morning?.length > 0 && (
+            {morningItems.length > 0 && (
               <div>
                 <div style={{ fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>☀️ MORNING</div>
-                {weekData.morning.map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(250,204,21,0.3)" }}>{s}</div>)}
+                {morningItems.map((s, i) => (
+                  <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(250,204,21,0.3)" }}>{s}</div>
+                ))}
               </div>
             )}
-            {weekData.night?.length > 0 && (
+            {nightItems.length > 0 && (
               <div>
                 <div style={{ fontSize: 11, color: "#818cf8", fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>🌙 NIGHT</div>
-                {weekData.night.map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(129,140,248,0.3)" }}>{s}</div>)}
+                {nightItems.map((s, i) => (
+                  <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(129,140,248,0.3)" }}>{s}</div>
+                ))}
               </div>
             )}
-            {weekData.avoid?.length > 0 && (
+            {avoidItems.length > 0 && (
               <div style={{ background: "rgba(248,113,113,0.06)", borderRadius: 10, padding: "10px 12px" }}>
                 <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, marginBottom: 4 }}>❌ AVOID</div>
-                {weekData.avoid.map((a, i) => <div key={i} style={{ fontSize: 12, color: "rgba(248,113,113,0.7)" }}>{a}</div>)}
+                {avoidItems.map((a, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "rgba(248,113,113,0.7)" }}>{a}</div>
+                ))}
               </div>
             )}
             {weekData.expectedResult && (
@@ -174,18 +196,16 @@ export default function SkinAnalysis() {
     setError("");
   };
 
-  // Opens gallery
   const openGallery = () => {
     galleryRef.current.value = "";
     galleryRef.current.click();
   };
 
-  // Opens camera — dynamically create input so capture attribute works natively
   const openCamera = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.setAttribute("capture", "user"); // front camera
+    input.setAttribute("capture", "user");
     input.style.display = "none";
     document.body.appendChild(input);
     input.onchange = async (e) => {
@@ -208,6 +228,9 @@ export default function SkinAnalysis() {
       const res = await skinAPI.analyze({ imageBase64, mediaType: "image/jpeg" });
       setResult(res.data.result);
       setActiveTab("overview");
+      // Update scan counter
+      const prev = parseInt(localStorage.getItem("glowup_skin_count") || "0");
+      localStorage.setItem("glowup_skin_count", prev + 1);
     } catch (err) {
       setError(err.response?.data?.error || "Analysis failed. Please try again.");
     }
@@ -225,18 +248,12 @@ export default function SkinAnalysis() {
   return (
     <div style={{ padding: "0 16px 100px" }}>
 
-      {/* Gallery input only — camera opened dynamically via JS */}
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={e => handleFile(e.target.files[0])}
-      />
+      <input ref={galleryRef} type="file" accept="image/*" style={{ display: "none" }}
+        onChange={e => handleFile(e.target.files[0])} />
 
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 24, fontWeight: 800, color: "#f0f0ff", fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "#f0f0ff", fontFamily: "var(--font-display)", marginBottom: 4 }}>
           Skin <span style={{ background: "linear-gradient(135deg, #f87171, #fb923c)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Analyzer</span>
         </div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
@@ -264,51 +281,22 @@ export default function SkinAnalysis() {
         </div>
       )}
 
-      {/* ── BUTTONS ── */}
+      {/* Buttons */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-        {/* 📸 Take Photo → opens camera */}
-        <button
-          onClick={openCamera}
-          style={{
-            padding: "13px 10px", border: "1.5px solid rgba(248,113,113,0.35)", borderRadius: 14,
-            background: "rgba(248,113,113,0.08)", color: "#f87171",
-            fontWeight: 700, fontSize: 13, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 7
-          }}
-        >
+        <button onClick={openCamera} style={{ padding: "13px 10px", border: "1.5px solid rgba(248,113,113,0.35)", borderRadius: 14, background: "rgba(248,113,113,0.08)", color: "#f87171", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           📸 Take Photo
         </button>
-
-        {/* 🖼️ Gallery → opens file picker */}
-        <button
-          onClick={openGallery}
-          style={{
-            padding: "13px 10px", border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 14,
-            background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.65)",
-            fontWeight: 700, fontSize: 13, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 7
-          }}
-        >
+        <button onClick={openGallery} style={{ padding: "13px 10px", border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 14, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.65)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           🖼️ Gallery
         </button>
       </div>
 
-      {/* Analyze button */}
       {imageBase64 && !loading && (
-        <button
-          onClick={analyze}
-          style={{
-            width: "100%", padding: "16px", border: "none", borderRadius: 16,
-            background: "linear-gradient(135deg, #f87171, #fb923c)",
-            color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer",
-            marginBottom: 16, boxShadow: "0 8px 24px rgba(248,113,113,0.35)"
-          }}
-        >
+        <button onClick={analyze} style={{ width: "100%", padding: "16px", border: "none", borderRadius: 16, background: "linear-gradient(135deg, #f87171, #fb923c)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", marginBottom: 16, boxShadow: "0 8px 24px rgba(248,113,113,0.35)" }}>
           🔬 Analyze My Skin with AI
         </button>
       )}
 
-      {/* Loading */}
       {loading && (
         <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 28, textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 36, marginBottom: 12 }}>🔬</div>
@@ -319,30 +307,28 @@ export default function SkinAnalysis() {
               <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171", animation: `bounce 1.4s ease-in-out ${i * 0.2}s infinite` }} />
             ))}
           </div>
+          <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}`}</style>
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 14, padding: 14, marginBottom: 16, fontSize: 13, color: "#f87171" }}>
           ⚠️ {error}
         </div>
       )}
 
-      {/* ── RESULTS ── */}
+      {/* Results */}
       {result && (
         <div>
           {/* Score card */}
           <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 16 }}>
             <ScoreRing score={result.skinScore} grade={result.grade} />
-
             {result.faceAnalysis?.verifiedByFacePP && (
               <div style={{ margin: "14px auto 0", width: "fit-content", background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.2)", borderRadius: 20, padding: "5px 14px", display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 10 }}>✅</span>
                 <span style={{ fontSize: 11, color: "#60a5fa", fontWeight: 600 }}>Verified by Face++ AI</span>
               </div>
             )}
-
             <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
               {[
                 { label: "Age", value: result.faceAnalysis?.age || "—", icon: "🎂" },
@@ -356,7 +342,6 @@ export default function SkinAnalysis() {
                 </div>
               ))}
             </div>
-
             {result.skinTypeSummary && (
               <div style={{ marginTop: 14, fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6, background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 12, borderLeft: "3px solid rgba(248,113,113,0.4)" }}>
                 {result.skinTypeSummary}
@@ -367,14 +352,7 @@ export default function SkinAnalysis() {
           {/* Tabs */}
           <div style={{ display: "flex", overflowX: "auto", gap: 6, marginBottom: 16, paddingBottom: 4 }}>
             {tabs.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                flexShrink: 0, padding: "8px 14px", border: "1px solid",
-                borderColor: activeTab === tab.id ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.07)",
-                borderRadius: 12, background: activeTab === tab.id ? "rgba(248,113,113,0.1)" : "rgba(255,255,255,0.03)",
-                color: activeTab === tab.id ? "#f87171" : "rgba(255,255,255,0.45)",
-                fontWeight: 600, fontSize: 12, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 5
-              }}>
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ flexShrink: 0, padding: "8px 14px", border: "1px solid", borderColor: activeTab === tab.id ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.07)", borderRadius: 12, background: activeTab === tab.id ? "rgba(248,113,113,0.1)" : "rgba(255,255,255,0.03)", color: activeTab === tab.id ? "#f87171" : "rgba(255,255,255,0.45)", fontWeight: 600, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
                 {tab.icon} {tab.label}
               </button>
             ))}
@@ -389,22 +367,22 @@ export default function SkinAnalysis() {
                   <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, fontStyle: "italic" }}>"{result.dermatologistNote}"</div>
                 </div>
               )}
-              {result.detectedProblems?.length > 0 && (
+              {toArray(result.detectedProblems).length > 0 && (
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>DETECTED ISSUES ({result.detectedProblems.length})</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>DETECTED ISSUES ({toArray(result.detectedProblems).length})</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {result.detectedProblems.map((p, i) => (
+                    {toArray(result.detectedProblems).map((p, i) => (
                       <div key={i} onClick={() => setActiveTab("problems")} style={{ background: `${SEVERITY_COLOR[p.severity] || "#facc15"}12`, border: `1px solid ${SEVERITY_COLOR[p.severity] || "#facc15"}30`, borderRadius: 20, padding: "5px 12px", fontSize: 12, color: SEVERITY_COLOR[p.severity] || "#facc15", cursor: "pointer" }}>
-                        {p.name}
+                        {p.name || p}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-              {result.skinStrengths?.length > 0 && (
+              {toArray(result.skinStrengths).length > 0 && (
                 <div style={{ background: "rgba(74,222,128,0.05)", border: "1px solid rgba(74,222,128,0.1)", borderRadius: 16, padding: 14, marginBottom: 14 }}>
                   <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 700, marginBottom: 8 }}>💪 SKIN STRENGTHS</div>
-                  {result.skinStrengths.map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(74,222,128,0.8)", padding: "3px 0" }}>✓ {s}</div>)}
+                  {toArray(result.skinStrengths).map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(74,222,128,0.8)", padding: "3px 0" }}>✓ {s}</div>)}
                 </div>
               )}
               {result.estimatedResults && (
@@ -448,7 +426,7 @@ export default function SkinAnalysis() {
                   })}
                 </div>
               )}
-              {result.detectedProblems?.map((p, i) => <ProblemCard key={i} problem={p} />)}
+              {toArray(result.detectedProblems).map((p, i) => <ProblemCard key={i} problem={typeof p === "object" ? p : { name: p, severity: "Mild", affectedArea: "Face", urgency: "Low", severityPercent: 30 }} />)}
             </div>
           )}
 
@@ -456,11 +434,11 @@ export default function SkinAnalysis() {
           {activeTab === "products" && (
             <div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Indian products · Budget-friendly · Tap for details</div>
-              {result.productPlan?.map((p, i) => <ProductCard key={i} product={p} index={i} />)}
-              {result.weeklyTreatments?.length > 0 && (
+              {toArray(result.productPlan).map((p, i) => <ProductCard key={i} product={p} index={i} />)}
+              {toArray(result.weeklyTreatments).length > 0 && (
                 <div style={{ marginTop: 16 }}>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>🗓 WEEKLY TREATMENTS</div>
-                  {result.weeklyTreatments.map((t, i) => (
+                  {toArray(result.weeklyTreatments).map((t, i) => (
                     <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14, marginBottom: 8 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>{t.day}</span>
@@ -479,39 +457,41 @@ export default function SkinAnalysis() {
           {activeTab === "plan" && result.treatmentPlan && (
             <div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Follow consistently · Tap week to expand</div>
-              {["week1","week2","week3","week4"].map(w => result.treatmentPlan[w] && <WeekCard key={w} weekNum={w} weekData={result.treatmentPlan[w]} />)}
+              {["week1","week2","week3","week4"].map(w =>
+                result.treatmentPlan[w] && <WeekCard key={w} weekNum={w} weekData={result.treatmentPlan[w]} />
+              )}
             </div>
           )}
 
           {/* Diet */}
           {activeTab === "diet" && (
             <div>
-              {result.ingredientsToUse?.length > 0 && (
+              {toArray(result.ingredientsToUse).length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, color: "#4ade80", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>✅ INGREDIENTS TO USE</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {result.ingredientsToUse.map((ing, i) => <div key={i} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "5px 14px", fontSize: 12, color: "#4ade80" }}>{ing}</div>)}
+                    {toArray(result.ingredientsToUse).map((ing, i) => <div key={i} style={{ background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", borderRadius: 20, padding: "5px 14px", fontSize: 12, color: "#4ade80" }}>{ing}</div>)}
                   </div>
                 </div>
               )}
-              {result.ingredientsToAvoid?.length > 0 && (
+              {toArray(result.ingredientsToAvoid).length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, color: "#f87171", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>❌ INGREDIENTS TO AVOID</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {result.ingredientsToAvoid.map((ing, i) => <div key={i} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 20, padding: "5px 14px", fontSize: 12, color: "#f87171" }}>{ing}</div>)}
+                    {toArray(result.ingredientsToAvoid).map((ing, i) => <div key={i} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 20, padding: "5px 14px", fontSize: 12, color: "#f87171" }}>{ing}</div>)}
                   </div>
                 </div>
               )}
-              {result.dietForSkin?.length > 0 && (
+              {toArray(result.dietForSkin).length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, color: "#facc15", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>🥗 DIET FOR HEALTHY SKIN</div>
-                  {result.dietForSkin.map((tip, i) => <div key={i} style={{ background: "rgba(250,204,21,0.05)", border: "1px solid rgba(250,204,21,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13, color: "rgba(250,204,21,0.8)" }}>🍽️ {tip}</div>)}
+                  {toArray(result.dietForSkin).map((tip, i) => <div key={i} style={{ background: "rgba(250,204,21,0.05)", border: "1px solid rgba(250,204,21,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13, color: "rgba(250,204,21,0.8)" }}>🍽️ {tip}</div>)}
                 </div>
               )}
-              {result.lifestyleTips?.length > 0 && (
+              {toArray(result.lifestyleTips).length > 0 && (
                 <div>
                   <div style={{ fontSize: 12, color: "#a78bfa", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>💡 LIFESTYLE TIPS</div>
-                  {result.lifestyleTips.map((tip, i) => <div key={i} style={{ background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13, color: "rgba(167,139,250,0.8)" }}>💜 {tip}</div>)}
+                  {toArray(result.lifestyleTips).map((tip, i) => <div key={i} style={{ background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontSize: 13, color: "rgba(167,139,250,0.8)" }}>💜 {tip}</div>)}
                 </div>
               )}
             </div>
