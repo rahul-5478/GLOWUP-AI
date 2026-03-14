@@ -11,7 +11,6 @@ export default function AuthPage() {
   const { login, register } = useAuth();
 
   useEffect(() => {
-    // Fade in animation on mount
     const t = setTimeout(() => setMounted(true), 30);
     return () => clearTimeout(t);
   }, []);
@@ -26,12 +25,12 @@ export default function AuthPage() {
   const handleSubmit = async () => {
     setError("");
     if (!form.email || !form.password) {
-      setError("Email aur password zaroori hai!");
+      setError("Email and password are required!");
       triggerShake();
       return;
     }
     if (mode === "register" && !form.name) {
-      setError("Naam bhi daalo!");
+      setError("Please enter your name!");
       triggerShake();
       return;
     }
@@ -46,8 +45,8 @@ export default function AuthPage() {
       const msg =
         err.response?.data?.error ||
         (mode === "login"
-          ? "Email ya password galat hai."
-          : "Account nahi bana. Try again.");
+          ? "Incorrect email or password."
+          : "Could not create account. Please try again.");
       setError(msg);
       triggerShake();
     }
@@ -72,6 +71,7 @@ export default function AuthPage() {
     outline: "none",
     marginBottom: 11,
     transition: "border-color 0.2s, box-shadow 0.2s",
+    boxSizing: "border-box",
   };
 
   return (
@@ -160,22 +160,22 @@ export default function AuthPage() {
               fontFamily: "var(--font-display)", fontSize: 19,
               fontWeight: 700, color: "var(--text)",
             }}>
-              {mode === "login" ? "Welcome back! 👋" : "Naya account banao ✨"}
+              {mode === "login" ? "Welcome back! 👋" : "Create your account ✨"}
             </div>
             <div style={{
               fontFamily: "var(--font-body)", fontSize: 12,
               color: "var(--muted)", marginTop: 3,
             }}>
               {mode === "login"
-                ? "Login karo aur apna glow journey continue karo"
-                : "Free mein join karo aur AI se glow karo"}
+                ? "Sign in and continue your glow journey"
+                : "Join free and start glowing with AI"}
             </div>
           </div>
 
           {/* Inputs */}
           {mode === "register" && (
             <input
-              placeholder="Tumhara naam"
+              placeholder="Your full name"
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -254,7 +254,7 @@ export default function AuthPage() {
                   display: "inline-block",
                   animation: "spin 0.75s linear infinite",
                 }} />
-                {mode === "login" ? "Logging in..." : "Creating account..."}
+                {mode === "login" ? "Signing in..." : "Creating account..."}
               </span>
             ) : (
               mode === "login" ? "✨ Sign In" : "🚀 Create Account"
@@ -264,7 +264,7 @@ export default function AuthPage() {
           {/* Switch link */}
           <div style={{ textAlign: "center", marginTop: 14 }}>
             <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-              {mode === "login" ? "Account nahi hai? " : "Already account hai? "}
+              {mode === "login" ? "Don't have an account? " : "Already have an account? "}
             </span>
             <span
               onClick={switchMode}
@@ -273,7 +273,7 @@ export default function AuthPage() {
                 color: "var(--accent)", fontWeight: 700, cursor: "pointer",
               }}
             >
-              {mode === "login" ? "Sign Up karo" : "Sign In karo"}
+              {mode === "login" ? "Sign Up" : "Sign In"}
             </span>
           </div>
         </div>
