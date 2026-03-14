@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { GlowButton, Card } from "../components/UI";
 import axios from "axios";
 
 const SUGGESTIONS = [
@@ -9,6 +8,8 @@ const SUGGESTIONS = [
   "Skincare routine for oily skin?",
   "Best colors for dark skin tone?",
 ];
+
+const API = process.env.REACT_APP_API_URL || "https://glowup-ai-backend-1.onrender.com/api";
 
 export default function AIStyleChat() {
   const [messages, setMessages] = useState([
@@ -31,7 +32,7 @@ export default function AIStyleChat() {
 
     try {
       const res = await axios.post(
-        `${process.env.REACT_APP_API_URL}/chat/message`,
+        `${API}/chat/message`,
         { message: msg },
         { headers: { Authorization: `Bearer ${localStorage.getItem("glowup_token")}` } }
       );
@@ -72,7 +73,9 @@ export default function AIStyleChat() {
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--grad1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>💅</div>
             <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "18px 18px 18px 4px", padding: "12px 16px" }}>
               <div style={{ display: "flex", gap: 4 }}>
-                {[0, 1, 2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", animation: `bounce 1s ${i * 0.2}s infinite` }} />)}
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--muted)", animation: `bounce 1s ${i * 0.2}s infinite` }} />
+                ))}
               </div>
             </div>
           </div>
@@ -100,7 +103,11 @@ export default function AIStyleChat() {
           placeholder="Ask your style coach..."
           style={{ flex: 1, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 24, padding: "12px 16px", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 14, outline: "none" }}
         />
-        <button onClick={() => sendMessage()} disabled={!input.trim() || loading} style={{ width: 46, height: 46, borderRadius: "50%", background: input.trim() ? "var(--grad1)" : "var(--surface)", border: "none", cursor: input.trim() ? "pointer" : "default", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+        <button
+          onClick={() => sendMessage()}
+          disabled={!input.trim() || loading}
+          style={{ width: 46, height: 46, borderRadius: "50%", background: input.trim() ? "var(--grad1)" : "var(--surface)", border: "none", cursor: input.trim() ? "pointer" : "default", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+        >
           🚀
         </button>
       </div>
