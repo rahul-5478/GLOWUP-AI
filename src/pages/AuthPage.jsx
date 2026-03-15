@@ -1,218 +1,437 @@
-import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
-import axios from "axios";
+import { useState, useEffect, useRef } from "react";
+import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { auth } from "../config/firebase";
 
-const API = process.env.REACT_APP_API_URL || "https://glowup-ai-backend-1.onrender.com/api";
+const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
-const S = {
-  page: { minHeight: "100vh", background: "#0A0A0F", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 16px" },
-  card: { background: "#1C1C28", borderRadius: 24, padding: "32px 24px", width: "100%", maxWidth: 400, border: "1px solid #2A2A3A" },
-  input: { width: "100%", background: "#13131A", border: "1px solid #2A2A3A", borderRadius: 14, padding: "14px 16px", color: "#F0F0FF", fontSize: 15, outline: "none", marginBottom: 12, boxSizing: "border-box", fontFamily: "inherit" },
-  btnPrimary: { width: "100%", padding: "14px", border: "none", borderRadius: 14, background: "linear-gradient(135deg,#FF6B6B,#FF8E53)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10, fontFamily: "inherit", boxShadow: "0 6px 20px rgba(255,107,107,0.3)" },
-  btnOtp: { width: "100%", padding: "13px", border: "1.5px solid rgba(77,150,255,0.4)", borderRadius: 14, background: "rgba(77,150,255,0.08)", color: "#4D96FF", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 10, fontFamily: "inherit" },
-  btnGhost: { width: "100%", padding: "13px", border: "1.5px solid #2A2A3A", borderRadius: 14, background: "transparent", color: "#8888AA", fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 10, fontFamily: "inherit" },
-  error: { background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: "10px 14px", color: "#f87171", fontSize: 13, marginBottom: 14 },
-  success: { background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)", borderRadius: 10, padding: "10px 14px", color: "#4ade80", fontSize: 13, marginBottom: 14 },
-  back: { color: "#555577", fontSize: 13, cursor: "pointer", textAlign: "center", marginTop: 8 },
-  title: { fontSize: 22, fontWeight: 700, color: "#F0F0FF", fontFamily: "'Playfair Display', serif", marginBottom: 6 },
-  sub: { fontSize: 13, color: "#8888AA", marginBottom: 24, lineHeight: 1.5 },
-  divider: { display: "flex", alignItems: "center", gap: 12, margin: "14px 0" },
-  line: { flex: 1, height: 1, background: "#2A2A3A" },
-  divText: { color: "#555577", fontSize: 12 },
-};
+/* ─── tiny helpers ─── */
+const Input = ({ icon, ...props }) => (
+  <div style={{ position: "relative", marginBottom: 12 }}>
+    <span style={{
+      position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+      fontSize: 16, opacity: 0.5
+    }}>{icon}</span>
+    <input {...props} style={{
+      width: "100%", padding: "12px 14px 12px 40px", borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)",
+      color: "#fff", fontSize: 14, fontFamily: "inherit", outline: "none",
+      boxSizing: "border-box", transition: "border 0.2s",
+      ...(props.style || {})
+    }}
+      onFocus={e => e.target.style.border = "1px solid rgba(168,85,247,0.6)"}
+      onBlur={e => e.target.style.border = "1px solid rgba(255,255,255,0.15)"}
+    />
+  </div>
+);
 
-export default function AuthPage() {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState("home");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [otpEmail, setOtpEmail] = useState("");
+const Btn = ({ children, loading, style, ...props }) => (
+  <button {...props} style={{
+    width: "100%", padding: "13px", borderRadius: 12, border: "none",
+    background: "linear-gradient(135deg,#a855f7,#ec4899)",
+    color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer",
+    fontFamily: "inherit", opacity: loading ? 0.7 : 1,
+    transition: "opacity 0.2s, transform 0.1s",
+    ...(style || {})
+  }}
+    onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
+    onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
+  >
+    {loading ? "⏳ Please wait..." : children}
+  </button>
+);
+
+/* ─── OTP Boxes ─── */
+function OtpBoxes({ value, onChange, length = 6 }) {
+  const refs = useRef([]);
+  const digits = value.split("").concat(Array(length).fill("")).slice(0, length);
+
+  const handle = (i, e) => {
+    const v = e.target.value.replace(/\D/g, "").slice(-1);
+    const arr = digits.slice();
+    arr[i] = v;
+    onChange(arr.join(""));
+    if (v && i < length - 1) refs.current[i + 1]?.focus();
+  };
+  const handleKey = (i, e) => {
+    if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "16px 0" }}>
+      {digits.map((d, i) => (
+        <input key={i} ref={el => refs.current[i] = el}
+          value={d} onChange={e => handle(i, e)} onKeyDown={e => handleKey(i, e)}
+          maxLength={1} inputMode="numeric"
+          style={{
+            width: 44, height: 52, textAlign: "center", fontSize: 22, fontWeight: 700,
+            borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)",
+            background: "rgba(255,255,255,0.08)", color: "#fff", outline: "none",
+            fontFamily: "inherit", transition: "border 0.2s"
+          }}
+          onFocus={e => e.target.style.border = "1px solid #a855f7"}
+          onBlur={e => e.target.style.border = "1px solid rgba(255,255,255,0.2)"}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════ */
+export default function AuthPage({ onLogin }) {
+  // mode: "main" | "register" | "login-pass" | "login-email-otp" | "login-mobile"
+  const [mode, setMode] = useState("main");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [msg, setMsg] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const reset = (m) => { setError(""); setMsg(""); setMode(m); };
+  // form fields
+  const [name, setName]       = useState("");
+  const [email, setEmail]     = useState("");
+  const [password, setPassword] = useState("");
+  const [otp, setOtp]         = useState("");
+  const [mobile, setMobile]   = useState("");
+  const [mobileOtp, setMobileOtp] = useState("");
 
-  // ── Register ───────────────────────────────────────────────
+  // OTP flow
+  const [otpSent, setOtpSent]           = useState(false);
+  const [resendTimer, setResendTimer]   = useState(0);
+  const [confirmResult, setConfirmResult] = useState(null); // Firebase confirm
+
+  const recaptchaRef = useRef(null);
+
+  // timer countdown
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const t = setTimeout(() => setResendTimer(r => r - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendTimer]);
+
+  const reset = () => {
+    setError(""); setSuccess(""); setOtp(""); setMobileOtp("");
+    setOtpSent(false); setResendTimer(0);
+  };
+
+  /* ── Register ── */
   const handleRegister = async () => {
-    if (!form.name || !form.email || !form.password) return setError("All fields required.");
-    if (form.password.length < 6) return setError("Password must be at least 6 characters.");
-    setLoading(true); setError("");
-    try { await register(form.name, form.email, form.password); }
-    catch (e) { setError(e.response?.data?.error || "Registration failed."); }
-    setLoading(false);
-  };
-
-  // ── Password Login ─────────────────────────────────────────
-  const handleLogin = async () => {
-    if (!form.email || !form.password) return setError("Email and password required.");
-    setLoading(true); setError("");
-    try { await login(form.email, form.password); }
-    catch (e) { setError(e.response?.data?.error || "Login failed."); }
-    setLoading(false);
-  };
-
-  // ── Send OTP ───────────────────────────────────────────────
-  const handleSendOTP = async () => {
-    if (!form.email) return setError("Enter your email first.");
-    setLoading(true); setError(""); setMsg("");
-    try {
-      await axios.post(`${API}/auth/send-otp`, { email: form.email });
-      setOtpEmail(form.email);
-      setOtp(["", "", "", "", "", ""]);
-      setMsg(`OTP sent to ${form.email}`);
-      setMode("otp-input");
-    } catch (e) { setError(e.response?.data?.error || "Failed to send OTP."); }
-    setLoading(false);
-  };
-
-  // ── Verify + Login ─────────────────────────────────────────
-  const handleVerifyOTP = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) return setError("Enter complete 6-digit OTP.");
+    if (!name || !email || !password) return setError("Sab fields fill karo.");
     setLoading(true); setError("");
     try {
-      await axios.post(`${API}/auth/verify-otp`, { email: otpEmail, otp: code });
-      const res = await axios.post(`${API}/auth/login-otp`, { email: otpEmail });
-      localStorage.setItem("glowup_token", res.data.token);
-      localStorage.setItem("glowup_user", JSON.stringify(res.data.user));
-      window.location.reload();
-    } catch (e) { setError(e.response?.data?.error || "Verification failed."); }
+      const r = await fetch(`${API}/api/auth/register`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      localStorage.setItem("token", d.token);
+      localStorage.setItem("user", JSON.stringify(d.user));
+      onLogin(d.user);
+    } catch (e) { setError(e.message); }
     setLoading(false);
   };
 
-  // ── OTP input ──────────────────────────────────────────────
-  const handleOtpChange = (i, val) => {
-    if (!/^\d*$/.test(val)) return;
-    const n = [...otp]; n[i] = val.slice(-1); setOtp(n);
-    if (val && i < 5) document.getElementById(`otp-${i + 1}`)?.focus();
-  };
-  const handleOtpKey = (i, e) => {
-    if (e.key === "Backspace" && !otp[i] && i > 0) document.getElementById(`otp-${i - 1}`)?.focus();
+  /* ── Password Login ── */
+  const handlePassLogin = async () => {
+    if (!email || !password) return setError("Email aur password daalo.");
+    setLoading(true); setError("");
+    try {
+      const r = await fetch(`${API}/api/auth/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      localStorage.setItem("token", d.token);
+      localStorage.setItem("user", JSON.stringify(d.user));
+      onLogin(d.user);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
   };
 
-  const Logo = () => (
-    <div style={{ textAlign: "center", marginBottom: 28 }}>
-      <div style={{ display: "inline-block", background: "linear-gradient(135deg,#FF6B6B,#FF8E53)", borderRadius: 14, padding: "12px 20px" }}>
-        <span style={{ fontSize: 22, fontWeight: 800, color: "#fff", fontFamily: "'Playfair Display', serif" }}>GlowUp AI</span>
+  /* ── Email OTP: Send ── */
+  const handleSendEmailOtp = async () => {
+    if (!email) return setError("Email daalo.");
+    setLoading(true); setError("");
+    try {
+      const r = await fetch(`${API}/api/auth/send-otp`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setOtpSent(true); setResendTimer(60);
+      setSuccess(`OTP bhej diya ${email} pe! 📧`);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  /* ── Email OTP: Verify ── */
+  const handleVerifyEmailOtp = async () => {
+    if (otp.length < 6) return setError("6-digit OTP daalo.");
+    setLoading(true); setError("");
+    try {
+      const r = await fetch(`${API}/api/auth/login-otp`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      localStorage.setItem("token", d.token);
+      localStorage.setItem("user", JSON.stringify(d.user));
+      onLogin(d.user);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  /* ── Mobile OTP: Setup reCAPTCHA ── */
+  const setupRecaptcha = () => {
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+        callback: () => {},
+      });
+    }
+  };
+
+  /* ── Mobile OTP: Send SMS ── */
+  const handleSendMobileOtp = async () => {
+    const num = mobile.trim();
+    if (!num || num.length < 10) return setError("Valid mobile number daalo.");
+    // Add +91 if not starts with +
+    const fullNum = num.startsWith("+") ? num : `+91${num}`;
+    setLoading(true); setError("");
+    try {
+      setupRecaptcha();
+      const result = await signInWithPhoneNumber(auth, fullNum, window.recaptchaVerifier);
+      setConfirmResult(result);
+      setOtpSent(true); setResendTimer(60);
+      setSuccess(`SMS bhej diya ${fullNum} pe! 📱`);
+    } catch (e) {
+      setError(e.message.includes("TOO_SHORT") ? "Valid number daalo (+91XXXXXXXXXX)" : e.message);
+      // reset recaptcha on error
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
+    }
+    setLoading(false);
+  };
+
+  /* ── Mobile OTP: Verify SMS ── */
+  const handleVerifyMobileOtp = async () => {
+    if (mobileOtp.length < 6) return setError("6-digit OTP daalo.");
+    if (!confirmResult) return setError("Pehle OTP send karo.");
+    setLoading(true); setError("");
+    try {
+      const result = await confirmResult.confirm(mobileOtp);
+      const firebaseToken = await result.user.getIdToken();
+      // Send to our backend
+      const r = await fetch(`${API}/api/auth/mobile-login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firebaseToken, mobile: mobile.startsWith("+") ? mobile : `+91${mobile}` })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      localStorage.setItem("token", d.token);
+      localStorage.setItem("user", JSON.stringify(d.user));
+      onLogin(d.user);
+    } catch (e) {
+      setError(e.message.includes("invalid-verification-code") ? "Galat OTP hai!" : e.message);
+    }
+    setLoading(false);
+  };
+
+  /* ══ STYLES ══ */
+  const card = {
+    minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+    background: "linear-gradient(135deg,#0f0c29,#302b63,#24243e)",
+    fontFamily: "'Inter','Segoe UI',sans-serif", padding: 20,
+  };
+  const box = {
+    background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)",
+    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 24,
+    padding: "32px 28px", width: "100%", maxWidth: 380, color: "#fff",
+  };
+  const title = { fontSize: 26, fontWeight: 800, textAlign: "center", marginBottom: 4,
+    background: "linear-gradient(135deg,#a855f7,#ec4899)", WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent" };
+  const sub = { fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center", marginBottom: 24 };
+  const divider = { display: "flex", alignItems: "center", gap: 10, margin: "16px 0",
+    color: "rgba(255,255,255,0.3)", fontSize: 12 };
+  const line = { flex: 1, height: 1, background: "rgba(255,255,255,0.1)" };
+  const backBtn = { background: "none", border: "none", color: "rgba(255,255,255,0.5)",
+    cursor: "pointer", fontSize: 13, marginBottom: 20, padding: 0, fontFamily: "inherit" };
+  const outlineBtn = (color = "#a855f7") => ({
+    width: "100%", padding: "12px", borderRadius: 12,
+    border: `1px solid ${color}40`, background: `${color}10`,
+    color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer",
+    fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s"
+  });
+
+  /* ══ SCREENS ══ */
+
+  // Main landing
+  if (mode === "main") return (
+    <div style={card}>
+      <div style={box}>
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          <span style={{ fontSize: 48 }}>✨</span>
+        </div>
+        <div style={title}>GlowUp AI</div>
+        <div style={sub}>Your AI-powered glow journey</div>
+
+        <Btn onClick={() => setMode("register")} style={{ marginBottom: 10 }}>
+          🚀 Create Account
+        </Btn>
+
+        <div style={divider}><span style={line}/> already have account <span style={line}/></div>
+
+        <button style={outlineBtn()} onClick={() => { reset(); setMode("login-pass"); }}>
+          🔑 Login with Password
+        </button>
+        <button style={outlineBtn("#ec4899")} onClick={() => { reset(); setMode("login-email-otp"); }}>
+          📧 Login with Email OTP
+        </button>
+        <button style={outlineBtn("#06b6d4")} onClick={() => { reset(); setMode("login-mobile"); }}>
+          📱 Login with Mobile OTP
+        </button>
+      </div>
+      <div id="recaptcha-container"></div>
+    </div>
+  );
+
+  /* ── Register ── */
+  if (mode === "register") return (
+    <div style={card}>
+      <div style={box}>
+        <button style={backBtn} onClick={() => setMode("main")}>← Back</button>
+        <div style={title}>Create Account</div>
+        <div style={sub}>Join GlowUp AI today ✨</div>
+
+        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
+
+        <Input icon="👤" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />
+        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+        <Input icon="🔒" placeholder="Password (min 6 chars)" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+
+        <Btn loading={loading} onClick={handleRegister} style={{ marginTop: 8 }}>Create Account 🚀</Btn>
+
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
+          Already have account?{" "}
+          <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { reset(); setMode("login-pass"); }}>Login</span>
+        </div>
       </div>
     </div>
   );
 
-  // ── HOME ───────────────────────────────────────────────────
-  if (mode === "home") return (
-    <div style={S.page}><div style={S.card}>
-      <Logo />
-      <div style={S.title}>Welcome 👋</div>
-      <div style={S.sub}>Sign in to get personalized AI recommendations for your face, fitness & fashion.</div>
-      {error && <div style={S.error}>⚠️ {error}</div>}
-      <button style={S.btnPrimary} onClick={() => reset("login-pass")}>🔑 Login with Password</button>
-      <button style={S.btnOtp}     onClick={() => reset("login-otp")}>📧 Login with Email OTP</button>
-      <div style={S.divider}><div style={S.line}/><span style={S.divText}>New here?</span><div style={S.line}/></div>
-      <button style={S.btnGhost}   onClick={() => reset("register")}>✨ Create Account</button>
-    </div></div>
-  );
-
-  // ── REGISTER ───────────────────────────────────────────────
-  if (mode === "register") return (
-    <div style={S.page}><div style={S.card}>
-      <div style={S.title}>Create Account ✨</div>
-      <div style={S.sub}>Join GlowUp AI — it's free</div>
-      {error && <div style={S.error}>⚠️ {error}</div>}
-      <input style={S.input} placeholder="Your Name"               value={form.name}     onChange={e => set("name", e.target.value)} />
-      <input style={S.input} placeholder="Email Address" type="email"   value={form.email}    onChange={e => set("email", e.target.value)} />
-      <input style={S.input} placeholder="Password (min 6)" type="password" value={form.password} onChange={e => set("password", e.target.value)} onKeyDown={e => e.key === "Enter" && handleRegister()} />
-      <button style={{ ...S.btnPrimary, opacity: loading ? 0.7 : 1 }} onClick={handleRegister} disabled={loading}>
-        {loading ? "Creating..." : "Create Account →"}
-      </button>
-      <div style={S.back} onClick={() => reset("home")}>← Back</div>
-    </div></div>
-  );
-
-  // ── LOGIN WITH PASSWORD ────────────────────────────────────
+  /* ── Password Login ── */
   if (mode === "login-pass") return (
-    <div style={S.page}><div style={S.card}>
-      <div style={S.title}>Welcome Back 👋</div>
-      <div style={S.sub}>Login with your password</div>
-      {error && <div style={S.error}>⚠️ {error}</div>}
-      <input style={S.input} placeholder="Email Address" type="email"    value={form.email}    onChange={e => set("email", e.target.value)} />
-      <input style={S.input} placeholder="Password"      type="password" value={form.password} onChange={e => set("password", e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} />
-      <button style={{ ...S.btnPrimary, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
-        {loading ? "Logging in..." : "Login →"}
-      </button>
-      <button style={S.btnOtp} onClick={() => reset("login-otp")}>📧 Use OTP instead</button>
-      <div style={S.back} onClick={() => reset("home")}>← Back</div>
-    </div></div>
-  );
+    <div style={card}>
+      <div style={box}>
+        <button style={backBtn} onClick={() => setMode("main")}>← Back</button>
+        <div style={title}>Welcome Back</div>
+        <div style={sub}>Login with password 🔑</div>
 
-  // ── LOGIN WITH OTP - enter email ───────────────────────────
-  if (mode === "login-otp") return (
-    <div style={S.page}><div style={S.card}>
-      <div style={S.title}>Login with OTP 📧</div>
-      <div style={S.sub}>We'll send a 6-digit code to your email. No password needed.</div>
-      {error && <div style={S.error}>⚠️ {error}</div>}
-      <input style={S.input} placeholder="Enter your email" type="email" value={form.email}
-        onChange={e => set("email", e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendOTP()} />
-      <button style={{ ...S.btnPrimary, opacity: loading ? 0.7 : 1 }} onClick={handleSendOTP} disabled={loading}>
-        {loading ? "Sending..." : "📨 Send OTP"}
-      </button>
-      <div style={S.back} onClick={() => reset("home")}>← Back</div>
-    </div></div>
-  );
+        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
 
-  // ── OTP INPUT ──────────────────────────────────────────────
-  if (mode === "otp-input") return (
-    <div style={S.page}><div style={S.card}>
-      <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <div style={{ fontSize: 44, marginBottom: 10 }}>📬</div>
-        <div style={S.title}>Check Your Email</div>
-        <div style={S.sub}>
-          6-digit code sent to<br />
-          <strong style={{ color: "#4D96FF" }}>{otpEmail}</strong>
+        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+        <Input icon="🔒" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+
+        <Btn loading={loading} onClick={handlePassLogin} style={{ marginTop: 8 }}>Login 🔑</Btn>
+
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
+          No account?{" "}
+          <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { reset(); setMode("register"); }}>Register</span>
         </div>
       </div>
+    </div>
+  );
 
-      {error && <div style={S.error}>⚠️ {error}</div>}
-      {msg   && <div style={S.success}>✅ {msg}</div>}
+  /* ── Email OTP Login ── */
+  if (mode === "login-email-otp") return (
+    <div style={card}>
+      <div style={box}>
+        <button style={backBtn} onClick={() => { reset(); setMode("main"); }}>← Back</button>
+        <div style={title}>Email OTP</div>
+        <div style={sub}>We'll send a code to your email 📧</div>
 
-      {/* OTP boxes */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
-        {otp.map((d, i) => (
+        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
+        {success && <div style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#4ade80" }}>✅ {success}</div>}
+
+        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={otpSent} />
+
+        {!otpSent ? (
+          <Btn loading={loading} onClick={handleSendEmailOtp}>Send OTP 📤</Btn>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>
+              6-digit code daalo 👇
+            </div>
+            <OtpBoxes value={otp} onChange={setOtp} />
+            <Btn loading={loading} onClick={handleVerifyEmailOtp}>Verify & Login ✅</Btn>
+            <div style={{ textAlign: "center", marginTop: 12, fontSize: 13 }}>
+              {resendTimer > 0
+                ? <span style={{ color: "rgba(255,255,255,0.4)" }}>Resend in {resendTimer}s</span>
+                : <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { setOtp(""); handleSendEmailOtp(); }}>Resend OTP 🔄</span>
+              }
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  /* ── Mobile OTP Login ── */
+  if (mode === "login-mobile") return (
+    <div style={card}>
+      <div style={box}>
+        <button style={backBtn} onClick={() => { reset(); setMode("main"); }}>← Back</button>
+        <div style={title}>Mobile OTP</div>
+        <div style={sub}>SMS se login karo 📱 (Free)</div>
+
+        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
+        {success && <div style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#4ade80" }}>✅ {success}</div>}
+
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: 0.5 }}>📱</span>
+          <span style={{ position: "absolute", left: 40, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>+91</span>
           <input
-            key={i} id={`otp-${i}`}
-            type="tel" inputMode="numeric" maxLength={1} value={d}
-            onChange={e => handleOtpChange(i, e.target.value)}
-            onKeyDown={e => handleOtpKey(i, e)}
+            placeholder="Mobile Number"
+            type="tel"
+            value={mobile}
+            onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            disabled={otpSent}
+            inputMode="numeric"
             style={{
-              width: 46, height: 54, textAlign: "center",
-              background: d ? "rgba(77,150,255,0.12)" : "#13131A",
-              border: `1.5px solid ${d ? "#4D96FF" : "#2A2A3A"}`,
-              borderRadius: 12, color: "#F0F0FF", fontSize: 22,
-              fontWeight: 700, outline: "none",
-              fontFamily: "'JetBrains Mono', monospace",
+              width: "100%", padding: "12px 14px 12px 72px", borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)",
+              color: "#fff", fontSize: 14, fontFamily: "inherit", outline: "none",
+              boxSizing: "border-box"
             }}
           />
-        ))}
+        </div>
+
+        {!otpSent ? (
+          <Btn loading={loading} onClick={handleSendMobileOtp}>Send SMS OTP 📤</Btn>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>
+              6-digit SMS code daalo 👇
+            </div>
+            <OtpBoxes value={mobileOtp} onChange={setMobileOtp} />
+            <Btn loading={loading} onClick={handleVerifyMobileOtp}>Verify & Login ✅</Btn>
+            <div style={{ textAlign: "center", marginTop: 12, fontSize: 13 }}>
+              {resendTimer > 0
+                ? <span style={{ color: "rgba(255,255,255,0.4)" }}>Resend in {resendTimer}s</span>
+                : <span style={{ color: "#06b6d4", cursor: "pointer" }} onClick={() => { setMobileOtp(""); setOtpSent(false); setConfirmResult(null); if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; } }}>Change Number 🔄</span>
+              }
+            </div>
+          </>
+        )}
+        <div id="recaptcha-container"></div>
       </div>
-
-      <div style={{ textAlign: "center", fontSize: 12, color: "#555577", marginBottom: 18 }}>
-        ⏱️ Expires in 10 minutes
-      </div>
-
-      <button
-        style={{ ...S.btnPrimary, opacity: (loading || otp.join("").length !== 6) ? 0.6 : 1 }}
-        onClick={handleVerifyOTP} disabled={loading || otp.join("").length !== 6}
-      >
-        {loading ? "Verifying..." : "✅ Verify & Login"}
-      </button>
-
-      <button style={{ ...S.btnOtp, opacity: loading ? 0.6 : 1 }} onClick={handleSendOTP} disabled={loading}>
-        🔄 Resend OTP
-      </button>
-
-      <div style={S.back} onClick={() => reset("home")}>← Back</div>
-    </div></div>
+    </div>
   );
 
   return null;
