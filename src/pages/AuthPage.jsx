@@ -1,438 +1,265 @@
-import { useState, useEffect, useRef } from "react";
-import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth } from "../config/firebase";
+import { useState, useEffect } from "react";
+import { useAuth } from "../hooks/useAuth";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+export default function AuthPage() {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [shake, setShake] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { login, register } = useAuth();
 
-/* ─── tiny helpers ─── */
-const Input = ({ icon, ...props }) => (
-  <div style={{ position: "relative", marginBottom: 12 }}>
-    <span style={{
-      position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
-      fontSize: 16, opacity: 0.5
-    }}>{icon}</span>
-    <input {...props} style={{
-      width: "100%", padding: "12px 14px 12px 40px", borderRadius: 12,
-      border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)",
-      color: "#fff", fontSize: 14, fontFamily: "inherit", outline: "none",
-      boxSizing: "border-box", transition: "border 0.2s",
-      ...(props.style || {})
-    }}
-      onFocus={e => e.target.style.border = "1px solid rgba(168,85,247,0.6)"}
-      onBlur={e => e.target.style.border = "1px solid rgba(255,255,255,0.15)"}
-    />
-  </div>
-);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 30);
+    return () => clearTimeout(t);
+  }, []);
 
-const Btn = ({ children, loading, style, ...props }) => (
-  <button {...props} style={{
-    width: "100%", padding: "13px", borderRadius: 12, border: "none",
-    background: "linear-gradient(135deg,#a855f7,#ec4899)",
-    color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer",
-    fontFamily: "inherit", opacity: loading ? 0.7 : 1,
-    transition: "opacity 0.2s, transform 0.1s",
-    ...(style || {})
-  }}
-    onMouseDown={e => e.currentTarget.style.transform = "scale(0.98)"}
-    onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-  >
-    {loading ? "⏳ Please wait..." : children}
-  </button>
-);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
-/* ─── OTP Boxes ─── */
-function OtpBoxes({ value, onChange, length = 6 }) {
-  const refs = useRef([]);
-  const digits = value.split("").concat(Array(length).fill("")).slice(0, length);
-
-  const handle = (i, e) => {
-    const v = e.target.value.replace(/\D/g, "").slice(-1);
-    const arr = digits.slice();
-    arr[i] = v;
-    onChange(arr.join(""));
-    if (v && i < length - 1) refs.current[i + 1]?.focus();
+  const triggerShake = () => {
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
   };
-  const handleKey = (i, e) => {
-    if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
+
+  const handleSubmit = async () => {
+    setError("");
+    if (!form.email || !form.password) {
+      setError("Email and password are required!");
+      triggerShake();
+      return;
+    }
+    if (mode === "register" && !form.name) {
+      setError("Please enter your name!");
+      triggerShake();
+      return;
+    }
+    setLoading(true);
+    try {
+      if (mode === "login") {
+        await login(form.email, form.password);
+      } else {
+        await register(form.name, form.email, form.password);
+      }
+    } catch (err) {
+      setError(
+        err.response?.data?.error ||
+        (mode === "login"
+          ? "Incorrect email or password."
+          : "Could not create account. Try again.")
+      );
+      triggerShake();
+    }
+    setLoading(false);
+  };
+
+  const switchMode = () => {
+    setMode((m) => (m === "login" ? "register" : "login"));
+    setError("");
+    setForm({ name: "", email: "", password: "" });
+  };
+
+  const inputStyle = {
+    width: "100%",
+    background: "rgba(255,255,255,0.04)",
+    border: "1.5px solid var(--border2)",
+    borderRadius: 14,
+    padding: "13px 16px",
+    color: "var(--text)",
+    fontFamily: "var(--font-body)",
+    fontSize: 15,
+    outline: "none",
+    marginBottom: 11,
+    transition: "border-color 0.2s, box-shadow 0.2s",
+    boxSizing: "border-box",
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "16px 0" }}>
-      {digits.map((d, i) => (
-        <input key={i} ref={el => refs.current[i] = el}
-          value={d} onChange={e => handle(i, e)} onKeyDown={e => handleKey(i, e)}
-          maxLength={1} inputMode="numeric"
-          style={{
-            width: 44, height: 52, textAlign: "center", fontSize: 22, fontWeight: 700,
-            borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(255,255,255,0.08)", color: "#fff", outline: "none",
-            fontFamily: "inherit", transition: "border 0.2s"
-          }}
-          onFocus={e => e.target.style.border = "1px solid #a855f7"}
-          onBlur={e => e.target.style.border = "1px solid rgba(255,255,255,0.2)"}
-        />
-      ))}
-    </div>
-  );
-}
+    <div
+      className="mesh-bg"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 20px",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Glow blobs */}
+      <div style={{ position: "absolute", top: -120, left: -80, width: 320, height: 320, borderRadius: "50%", pointerEvents: "none", background: "radial-gradient(circle, rgba(255,77,109,0.12) 0%, transparent 70%)" }} />
+      <div style={{ position: "absolute", bottom: -120, right: -80, width: 320, height: 320, borderRadius: "50%", pointerEvents: "none", background: "radial-gradient(circle, rgba(67,97,238,0.1) 0%, transparent 70%)" }} />
 
-/* ══════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════ */
-export default function AuthPage({ onLogin }) {
-  // mode: "main" | "register" | "login-pass" | "login-email-otp" | "login-mobile"
-  const [mode, setMode] = useState("main");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+      <div style={{
+        width: "100%", maxWidth: 390,
+        opacity: mounted ? 1 : 0,
+        transform: mounted ? "translateY(0px)" : "translateY(20px)",
+        transition: "opacity 0.4s ease, transform 0.4s ease",
+      }}>
 
-  // form fields
-  const [name, setName]       = useState("");
-  const [email, setEmail]     = useState("");
-  const [password, setPassword] = useState("");
-  const [otp, setOtp]         = useState("");
-  const [mobile, setMobile]   = useState("");
-  const [mobileOtp, setMobileOtp] = useState("");
-
-  // OTP flow
-  const [otpSent, setOtpSent]           = useState(false);
-  const [resendTimer, setResendTimer]   = useState(0);
-  const [confirmResult, setConfirmResult] = useState(null); // Firebase confirm
-
-  const recaptchaRef = useRef(null);
-
-  // timer countdown
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-    const t = setTimeout(() => setResendTimer(r => r - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendTimer]);
-
-  const reset = () => {
-    setError(""); setSuccess(""); setOtp(""); setMobileOtp("");
-    setOtpSent(false); setResendTimer(0);
-  };
-
-  /* ── Register ── */
-  const handleRegister = async () => {
-    if (!name || !email || !password) return setError("Sab fields fill karo.");
-    setLoading(true); setError("");
-    try {
-      const r = await fetch(`${API}/api/auth/register`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      localStorage.setItem("token", d.token);
-      localStorage.setItem("user", JSON.stringify(d.user));
-      onLogin(d.user);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  /* ── Password Login ── */
-  const handlePassLogin = async () => {
-    if (!email || !password) return setError("Email aur password daalo.");
-    setLoading(true); setError("");
-    try {
-      const r = await fetch(`${API}/api/auth/login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      localStorage.setItem("token", d.token);
-      localStorage.setItem("user", JSON.stringify(d.user));
-      onLogin(d.user);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  /* ── Email OTP: Send ── */
-  const handleSendEmailOtp = async () => {
-    if (!email) return setError("Email daalo.");
-    setLoading(true); setError("");
-    try {
-      const r = await fetch(`${API}/api/auth/send-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      setOtpSent(true); setResendTimer(60);
-      setSuccess(`OTP bhej diya ${email} pe! 📧`);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  /* ── Email OTP: Verify ── */
-  const handleVerifyEmailOtp = async () => {
-    if (otp.length < 6) return setError("6-digit OTP daalo.");
-    setLoading(true); setError("");
-    try {
-      const r = await fetch(`${API}/api/auth/login-otp`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      localStorage.setItem("token", d.token);
-      localStorage.setItem("user", JSON.stringify(d.user));
-      onLogin(d.user);
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  /* ── Mobile OTP: Setup reCAPTCHA ── */
-  const setupRecaptcha = () => {
-    if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible",
-        callback: () => {},
-      });
-    }
-  };
-
-  /* ── Mobile OTP: Send SMS ── */
-  const handleSendMobileOtp = async () => {
-    const num = mobile.trim();
-    if (!num || num.length < 10) return setError("Valid mobile number daalo.");
-    // Add +91 if not starts with +
-    const fullNum = num.startsWith("+") ? num : `+91${num}`;
-    setLoading(true); setError("");
-    try {
-      setupRecaptcha();
-      const result = await signInWithPhoneNumber(auth, fullNum, window.recaptchaVerifier);
-      setConfirmResult(result);
-      setOtpSent(true); setResendTimer(60);
-      setSuccess(`SMS bhej diya ${fullNum} pe! 📱`);
-    } catch (e) {
-      setError(e.message.includes("TOO_SHORT") ? "Valid number daalo (+91XXXXXXXXXX)" : e.message);
-      // reset recaptcha on error
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
-      }
-    }
-    setLoading(false);
-  };
-
-  /* ── Mobile OTP: Verify SMS ── */
-  const handleVerifyMobileOtp = async () => {
-    if (mobileOtp.length < 6) return setError("6-digit OTP daalo.");
-    if (!confirmResult) return setError("Pehle OTP send karo.");
-    setLoading(true); setError("");
-    try {
-      const result = await confirmResult.confirm(mobileOtp);
-      const firebaseToken = await result.user.getIdToken();
-      // Send to our backend
-      const r = await fetch(`${API}/api/auth/mobile-login`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firebaseToken, mobile: mobile.startsWith("+") ? mobile : `+91${mobile}` })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      localStorage.setItem("token", d.token);
-      localStorage.setItem("user", JSON.stringify(d.user));
-      onLogin(d.user);
-    } catch (e) {
-      setError(e.message.includes("invalid-verification-code") ? "Galat OTP hai!" : e.message);
-    }
-    setLoading(false);
-  };
-
-  /* ══ STYLES ══ */
-  const card = {
-    minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-    background: "linear-gradient(135deg,#0f0c29,#302b63,#24243e)",
-    fontFamily: "'Inter','Segoe UI',sans-serif", padding: 20,
-  };
-  const box = {
-    background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)",
-    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 24,
-    padding: "32px 28px", width: "100%", maxWidth: 380, color: "#fff",
-  };
-  const title = { fontSize: 26, fontWeight: 800, textAlign: "center", marginBottom: 4,
-    background: "linear-gradient(135deg,#a855f7,#ec4899)", WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent" };
-  const sub = { fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center", marginBottom: 24 };
-  const divider = { display: "flex", alignItems: "center", gap: 10, margin: "16px 0",
-    color: "rgba(255,255,255,0.3)", fontSize: 12 };
-  const line = { flex: 1, height: 1, background: "rgba(255,255,255,0.1)" };
-  const backBtn = { background: "none", border: "none", color: "rgba(255,255,255,0.5)",
-    cursor: "pointer", fontSize: 13, marginBottom: 20, padding: 0, fontFamily: "inherit" };
-  const outlineBtn = (color = "#a855f7") => ({
-    width: "100%", padding: "12px", borderRadius: 12,
-    border: `1px solid ${color}40`, background: `${color}10`,
-    color: "#fff", fontWeight: 600, fontSize: 14, cursor: "pointer",
-    fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s"
-  });
-
-  /* ══ SCREENS ══ */
-
-  // Main landing
-  if (mode === "main") return (
-    <div style={card}>
-      <div style={box}>
-        <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <span style={{ fontSize: 48 }}>✨</span>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{
+            width: 68, height: 68, borderRadius: 20,
+            background: "var(--grad1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 30, margin: "0 auto 14px",
+            boxShadow: "0 8px 28px rgba(255,77,109,0.35)",
+            animation: "glowPulse 2.5s ease-in-out infinite",
+          }}>✨</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, lineHeight: 1, letterSpacing: -0.5 }}>
+            Glow<span className="text-gradient-1">Up</span>
+            <span className="text-gradient-2"> AI</span>
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginTop: 6 }}>
+            Your AI beauty & fitness coach
+          </div>
         </div>
-        <div style={title}>GlowUp AI</div>
-        <div style={sub}>Your AI-powered glow journey</div>
 
-        <Btn onClick={() => setMode("register")} style={{ marginBottom: 10 }}>
-          🚀 Create Account
-        </Btn>
+        {/* Card */}
+        <div style={{
+          background: "var(--card)",
+          borderRadius: 24, padding: "26px 22px",
+          border: "1px solid var(--border2)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          animation: shake ? "shakeX 0.4s ease" : "none",
+        }}>
 
-        <div style={divider}><span style={line}/> already have account <span style={line}/></div>
+          {/* Tabs */}
+          <div className="tab-bar" style={{ marginBottom: 22 }}>
+            {["login", "register"].map((m) => (
+              <button
+                key={m}
+                onClick={() => { setMode(m); setError(""); setForm({ name: "", email: "", password: "" }); }}
+                className={`tab-btn ${mode === m ? "active" : ""}`}
+              >
+                {m === "login" ? "Sign In" : "Sign Up"}
+              </button>
+            ))}
+          </div>
 
-        <button style={outlineBtn()} onClick={() => { reset(); setMode("login-pass"); }}>
-          🔑 Login with Password
-        </button>
-        <button style={outlineBtn("#ec4899")} onClick={() => { reset(); setMode("login-email-otp"); }}>
-          📧 Login with Email OTP
-        </button>
-        <button style={outlineBtn("#06b6d4")} onClick={() => { reset(); setMode("login-mobile"); }}>
-          📱 Login with Mobile OTP
-        </button>
-      </div>
-      <div id="recaptcha-container"></div>
-    </div>
-  );
-
-  /* ── Register ── */
-  if (mode === "register") return (
-    <div style={card}>
-      <div style={box}>
-        <button style={backBtn} onClick={() => setMode("main")}>← Back</button>
-        <div style={title}>Create Account</div>
-        <div style={sub}>Join GlowUp AI today ✨</div>
-
-        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
-
-        <Input icon="👤" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} />
-        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-        <Input icon="🔒" placeholder="Password (min 6 chars)" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-
-        <Btn loading={loading} onClick={handleRegister} style={{ marginTop: 8 }}>Create Account 🚀</Btn>
-
-        <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
-          Already have account?{" "}
-          <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { reset(); setMode("login-pass"); }}>Login</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  /* ── Password Login ── */
-  if (mode === "login-pass") return (
-    <div style={card}>
-      <div style={box}>
-        <button style={backBtn} onClick={() => setMode("main")}>← Back</button>
-        <div style={title}>Welcome Back</div>
-        <div style={sub}>Login with password 🔑</div>
-
-        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
-
-        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-        <Input icon="🔒" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-
-        <Btn loading={loading} onClick={handlePassLogin} style={{ marginTop: 8 }}>Login 🔑</Btn>
-
-        <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
-          No account?{" "}
-          <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { reset(); setMode("register"); }}>Register</span>
-        </div>
-      </div>
-    </div>
-  );
-
-  /* ── Email OTP Login ── */
-  if (mode === "login-email-otp") return (
-    <div style={card}>
-      <div style={box}>
-        <button style={backBtn} onClick={() => { reset(); setMode("main"); }}>← Back</button>
-        <div style={title}>Email OTP</div>
-        <div style={sub}>We'll send a code to your email 📧</div>
-
-        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
-        {success && <div style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#4ade80" }}>✅ {success}</div>}
-
-        <Input icon="📧" placeholder="Email Address" type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={otpSent} />
-
-        {!otpSent ? (
-          <Btn loading={loading} onClick={handleSendEmailOtp}>Send OTP 📤</Btn>
-        ) : (
-          <>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>
-              6-digit code daalo 👇
+          {/* Heading */}
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, color: "var(--text)" }}>
+              {mode === "login" ? "Welcome back! 👋" : "Create your account ✨"}
             </div>
-            <OtpBoxes value={otp} onChange={setOtp} />
-            <Btn loading={loading} onClick={handleVerifyEmailOtp}>Verify & Login ✅</Btn>
-            <div style={{ textAlign: "center", marginTop: 12, fontSize: 13 }}>
-              {resendTimer > 0
-                ? <span style={{ color: "rgba(255,255,255,0.4)" }}>Resend in {resendTimer}s</span>
-                : <span style={{ color: "#a855f7", cursor: "pointer" }} onClick={() => { setOtp(""); handleSendEmailOtp(); }}>Resend OTP 🔄</span>
-              }
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+              {mode === "login"
+                ? "Sign in and continue your glow journey"
+                : "Join free and start glowing with AI"}
             </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+          </div>
 
-  /* ── Mobile OTP Login ── */
-  if (mode === "login-mobile") return (
-    <div style={card}>
-      <div style={box}>
-        <button style={backBtn} onClick={() => { reset(); setMode("main"); }}>← Back</button>
-        <div style={title}>Mobile OTP</div>
-        <div style={sub}>SMS se login karo 📱 (Free)</div>
+          {/* Inputs */}
+          {mode === "register" && (
+            <input
+              placeholder="Your full name"
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              style={inputStyle}
+              onFocus={(e) => { e.target.style.borderColor = "var(--accent)"; e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }}
+            />
+          )}
 
-        {error && <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" }}>❌ {error}</div>}
-        {success && <div style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#4ade80" }}>✅ {success}</div>}
-
-        <div style={{ position: "relative", marginBottom: 12 }}>
-          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, opacity: 0.5 }}>📱</span>
-          <span style={{ position: "absolute", left: 40, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "rgba(255,255,255,0.5)", fontWeight: 600 }}>+91</span>
           <input
-            placeholder="Mobile Number"
-            type="tel"
-            value={mobile}
-            onChange={e => setMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            disabled={otpSent}
-            inputMode="numeric"
-            style={{
-              width: "100%", padding: "12px 14px 12px 72px", borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)",
-              color: "#fff", fontSize: 14, fontFamily: "inherit", outline: "none",
-              boxSizing: "border-box"
-            }}
+            type="email"
+            placeholder="Email address"
+            value={form.email}
+            onChange={(e) => set("email", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            style={inputStyle}
+            onFocus={(e) => { e.target.style.borderColor = "var(--accent)"; e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)"; }}
+            onBlur={(e) => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }}
           />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={(e) => set("password", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            style={{ ...inputStyle, marginBottom: 0 }}
+            onFocus={(e) => { e.target.style.borderColor = "var(--accent)"; e.target.style.boxShadow = "0 0 0 3px var(--accent-glow)"; }}
+            onBlur={(e) => { e.target.style.borderColor = "var(--border2)"; e.target.style.boxShadow = "none"; }}
+          />
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              marginTop: 10, padding: "10px 14px",
+              background: "rgba(255,77,109,0.1)",
+              border: "1px solid rgba(255,77,109,0.3)",
+              borderRadius: 11,
+              fontFamily: "var(--font-body)", fontSize: 13, color: "var(--accent)",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="btn-primary"
+            style={{ marginTop: 16 }}
+          >
+            {loading ? (
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <span style={{
+                  width: 16, height: 16,
+                  border: "2.5px solid rgba(255,255,255,0.3)",
+                  borderTopColor: "#fff",
+                  borderRadius: "50%",
+                  display: "inline-block",
+                  animation: "spin 0.75s linear infinite",
+                }} />
+                {mode === "login" ? "Signing in..." : "Creating account..."}
+              </span>
+            ) : (
+              mode === "login" ? "✨ Sign In" : "🚀 Create Account"
+            )}
+          </button>
+
+          {/* Switch */}
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <span style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+              {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+            </span>
+            <span
+              onClick={switchMode}
+              style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--accent)", fontWeight: 700, cursor: "pointer" }}
+            >
+              {mode === "login" ? "Sign Up" : "Sign In"}
+            </span>
+          </div>
         </div>
 
-        {!otpSent ? (
-          <Btn loading={loading} onClick={handleSendMobileOtp}>Send SMS OTP 📤</Btn>
-        ) : (
-          <>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "center" }}>
-              6-digit SMS code daalo 👇
+        {/* Feature chips */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 22 }}>
+          {[["✨", "Face AI"], ["💪", "Fitness"], ["👗", "Fashion"], ["🧴", "Skin"]].map(([icon, label]) => (
+            <div key={label} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, padding: "5px 12px", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ fontSize: 13 }}>{icon}</span>
+              <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>{label}</span>
             </div>
-            <OtpBoxes value={mobileOtp} onChange={setMobileOtp} />
-            <Btn loading={loading} onClick={handleVerifyMobileOtp}>Verify & Login ✅</Btn>
-            <div style={{ textAlign: "center", marginTop: 12, fontSize: 13 }}>
-              {resendTimer > 0
-                ? <span style={{ color: "rgba(255,255,255,0.4)" }}>Resend in {resendTimer}s</span>
-                : <span style={{ color: "#06b6d4", cursor: "pointer" }} onClick={() => { setMobileOtp(""); setOtpSent(false); setConfirmResult(null); if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; } }}>Change Number 🔄</span>
-              }
-            </div>
-          </>
-        )}
-        <div id="recaptcha-container"></div>
+          ))}
+        </div>
       </div>
+
+      <style>{`
+        @keyframes shakeX {
+          0%,100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-5px); }
+          80% { transform: translateX(5px); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
-
-  return null;
 }
