@@ -5,7 +5,6 @@ import { useLang } from "./hooks/useLanguage";
 import { useNotifications } from "./hooks/useNotifications";
 import { warmUpBackend } from "./utils/api";
 
-// ── Lazy load pages ──
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const FaceAnalysis = lazy(() => import("./pages/FaceAnalysis"));
 const FitnessCoach = lazy(() => import("./pages/FitnessCoach"));
@@ -74,7 +73,6 @@ function AppShell() {
   const { toasts } = useNotifications();
   const { user } = useAuth();
 
-  // Show onboarding for new users
   useEffect(() => {
     const onboarded = localStorage.getItem("glowup_onboarded");
     if (!onboarded && user) {
@@ -83,7 +81,6 @@ function AppShell() {
     }
   }, [user]);
 
-  // ── Android Back Button Handler ──
   useEffect(() => {
     let backHandler = null;
     const setupBackButton = async () => {
@@ -97,14 +94,13 @@ function AppShell() {
           CapApp.exitApp();
         });
       } catch (e) {
-        console.log("Capacitor App plugin not available (web mode)");
+        console.log("Capacitor not available (web mode)");
       }
     };
     setupBackButton();
     return () => { if (backHandler) backHandler.remove(); };
   }, [tab, showPayment, showPlans, showOnboarding]);
 
-  // ── Sirf active page render karo ──
   const renderPage = () => {
     switch (tab) {
       case 0: return <Dashboard setTab={setTab} />;
@@ -157,7 +153,7 @@ function AppShell() {
         </div>
       </header>
 
-      {/* Page Content — sirf active page */}
+      {/* Page Content */}
       <div style={{ flex: 1, overflowY: "auto", paddingTop: 16 }} key={tab}>
         <div className="tab-content">
           <Suspense fallback={<PageLoader />}>
@@ -166,28 +162,55 @@ function AppShell() {
         </div>
       </div>
 
-      {/* Bottom Nav */}
+      {/* Bottom Nav — fixed, sab 8 tabs fit honge */}
       <nav style={{
         background: "rgba(8,8,16,0.92)",
         backdropFilter: "blur(24px)",
         WebkitBackdropFilter: "blur(24px)",
         borderTop: "1px solid var(--border)",
         display: "flex",
-        justifyContent: "space-around",
+        justifyContent: "space-between",
         alignItems: "center",
-        padding: "8px 4px",
-        paddingBottom: "max(10px, env(safe-area-inset-bottom, 10px))",
+        padding: "6px 2px",
+        paddingBottom: "max(8px, env(safe-area-inset-bottom, 8px))",
         flexShrink: 0,
+        width: "100%",
+        boxSizing: "border-box",
       }}>
         {TABS.map((item, i) => (
-          <div key={i} className="bottom-nav-item" onClick={() => setTab(i)}>
-            <div className={`bottom-nav-icon ${tab === i ? "active" : ""}`}>
+          <div
+            key={i}
+            onClick={() => setTab(i)}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              padding: "2px 0",
+              minWidth: 0,
+            }}
+          >
+            <div style={{
+              fontSize: 20,
+              lineHeight: 1,
+              marginBottom: 3,
+              filter: tab === i ? "none" : "grayscale(30%)",
+              transform: tab === i ? "scale(1.15)" : "scale(1)",
+              transition: "transform 0.2s",
+            }}>
               {item.icon}
             </div>
             <span style={{
-              fontFamily: "var(--font-body)", fontSize: 8, fontWeight: 700,
+              fontFamily: "var(--font-body)",
+              fontSize: 7,
+              fontWeight: 700,
               color: tab === i ? "var(--accent)" : "var(--muted2)",
-              letterSpacing: 0.5, textTransform: "uppercase", transition: "color 0.2s",
+              letterSpacing: 0.3,
+              textTransform: "uppercase",
+              transition: "color 0.2s",
+              whiteSpace: "nowrap",
             }}>
               {item.label}
             </span>
