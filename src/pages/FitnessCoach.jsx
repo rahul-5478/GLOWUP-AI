@@ -110,7 +110,6 @@ function CalorieBar({ consumed, target }) {
   const remaining = target - consumed;
   const over = consumed > target;
   const color = over ? "#FF4D6D" : pct > 80 ? "#FFD93D" : "#51CF66";
-
   return (
     <div style={{ background: "var(--card)", border: `1px solid ${over ? "rgba(255,77,109,0.3)" : "var(--border)"}`, borderRadius: 20, padding: 16, marginBottom: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
@@ -123,12 +122,9 @@ function CalorieBar({ consumed, target }) {
           <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginTop: 2 }}>daily target</div>
         </div>
       </div>
-
-      {/* Progress bar */}
       <div style={{ background: "var(--surface)", borderRadius: 6, height: 10, overflow: "hidden", marginBottom: 8 }}>
         <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${color}, ${color}99)`, borderRadius: 6, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
       </div>
-
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>{Math.round(pct)}% of daily goal</div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: over ? "#FF4D6D" : "#51CF66", fontWeight: 700 }}>
@@ -139,9 +135,107 @@ function CalorieBar({ consumed, target }) {
   );
 }
 
+// ─── FOOD SEARCH ─────────────────────────────────────────────────────────────
+function FoodSearch({ onAdd, onBack }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [qty, setQty] = useState({});
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef(null);
+
+  const search = (q) => {
+    setQuery(q);
+    if (!q.trim()) { setResults([]); return; }
+    const local = FOOD_DB.filter(f =>
+      f.name.toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 3);
+    setResults(local);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.post("/fitness/search-food", { query: q });
+        const groqResults = res.data.results || [];
+        const localNames = local.map(f => f.name.toLowerCase());
+        const newItems = groqResults.filter(f => !localNames.includes(f.name.toLowerCase()));
+        setResults([...local, ...newItems].slice(0, 10));
+      } catch {
+        // local results hi dikhao
+      }
+      setLoading(false);
+    }, 600);
+  };
+
+  const getM = (name) => parseFloat(qty[name] || 1);
+
+  return (
+    <div>
+      {onBack && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <div onClick={onBack} style={{ width: 36, height: 36, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>‹</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text)" }}>🔍 Food Search</div>
+        </div>
+      )}
+      <input
+        placeholder="Search any food... (Dal, Maggi, Pizza, Shake)"
+        value={query}
+        onChange={e => search(e.target.value)}
+        style={{ width: "100%", background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "13px 16px", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 8 }}
+        autoFocus
+      />
+      {loading && (
+        <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", padding: "6px 4px", marginBottom: 8 }}>
+          🔍 Searching more foods...
+        </div>
+      )}
+      {!query && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          {["Dal", "Chapati", "Rice", "Egg", "Chicken", "Paneer", "Dosa", "Oats", "Maggi", "Banana"].map(tag => (
+            <div key={tag} onClick={() => search(tag)}
+              style={{ padding: "6px 14px", borderRadius: 20, background: "var(--card)", border: "1px solid var(--border)", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>
+              {tag}
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {results.map(food => {
+          const m = getM(food.name);
+          return (
+            <div key={food.name} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{food.name}</div>
+                <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#FF6B6B" }}>{Math.round(food.cal * m)} cal</span>
+                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>P:{Math.round(food.protein * m)}g C:{Math.round(food.carbs * m)}g F:{Math.round(food.fat * m)}g</span>
+                </div>
+                {food.serving && <div style={{ fontFamily: "var(--font-body)", fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{food.serving}</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <div onClick={() => setQty(q => ({ ...q, [food.name]: Math.max(0.5, parseFloat(q[food.name] || 1) - 0.5).toString() }))}
+                  style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>−</div>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, minWidth: 20, textAlign: "center", color: "var(--text)" }}>{qty[food.name] || 1}x</span>
+                <div onClick={() => setQty(q => ({ ...q, [food.name]: (parseFloat(q[food.name] || 1) + 0.5).toString() }))}
+                  style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>+</div>
+              </div>
+              <div onClick={() => onAdd({ ...food, calories: Math.round(food.cal * m), foodName: food.name, protein: Math.round(food.protein * m), carbs: Math.round(food.carbs * m), fat: Math.round(food.fat * m) })}
+                style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(81,207,102,0.15)", border: "1px solid rgba(81,207,102,0.3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16 }}>✓</div>
+            </div>
+          );
+        })}
+        {query && !loading && results.length === 0 && (
+          <div style={{ textAlign: "center", padding: "20px 0", fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+            No results found for "{query}"
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── FOOD PICKER MODAL ───────────────────────────────────────────────────────
 function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
-  const [mode, setMode] = useState("options"); // options | search | scan | preview | result
+  const [mode, setMode] = useState("options");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [qty, setQty] = useState({});
@@ -151,11 +245,25 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
   const [scanResult, setScanResult] = useState(null);
   const fileRef = useRef();
   const videoRef = useRef();
+  const debounceRef = useRef(null);
 
   const search = (q) => {
     setQuery(q);
     if (!q.trim()) { setResults([]); return; }
-    setResults(FOOD_DB.filter(f => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8));
+    const local = FOOD_DB.filter(f => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 3);
+    setResults(local);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.post("/fitness/search-food", { query: q });
+        const groqResults = res.data.results || [];
+        const localNames = local.map(f => f.name.toLowerCase());
+        const newItems = groqResults.filter(f => !localNames.includes(f.name.toLowerCase()));
+        setResults([...local, ...newItems].slice(0, 10));
+      } catch {}
+      setLoading(false);
+    }, 600);
   };
 
   const handleFile = (e) => {
@@ -197,30 +305,24 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
   };
 
   const getMultiplier = (name) => parseFloat(qty[name] || 1);
-
   const mealColors = { breakfast: "#FFD93D", lunch: "#FF6B6B", snacks: "#51CF66", dinner: "#845EF7" };
   const color = mealColors[mealSlot] || "#FF6B6B";
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 2000, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
       <div style={{ background: "var(--card)", borderRadius: "24px 24px 0 0", padding: 20, maxHeight: "85vh", overflowY: "auto", border: "1px solid var(--border2)" }}>
-
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "var(--text)" }}>
               Add to {mealSlot.charAt(0).toUpperCase() + mealSlot.slice(1)}
             </div>
             {calorieLimit > 0 && (
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-                ~{calorieLimit} cal remaining for this meal
-              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginTop: 2 }}>~{calorieLimit} cal remaining</div>
             )}
           </div>
           <div onClick={onClose} style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, color: "var(--muted)" }}>✕</div>
         </div>
 
-        {/* Options */}
         {mode === "options" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
             {[
@@ -238,7 +340,6 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
 
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
 
-        {/* Camera */}
         {mode === "camera" && (
           <div>
             <video ref={videoRef} autoPlay playsInline style={{ width: "100%", borderRadius: 16, marginBottom: 12 }} />
@@ -246,7 +347,6 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
           </div>
         )}
 
-        {/* Preview */}
         {mode === "preview" && preview && (
           <div>
             <img src={preview} alt="food" style={{ width: "100%", borderRadius: 16, marginBottom: 12, maxHeight: 200, objectFit: "cover" }} />
@@ -257,7 +357,6 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
           </div>
         )}
 
-        {/* Scan Result */}
         {mode === "result" && scanResult && (
           <div>
             <div style={{ background: "var(--surface)", borderRadius: 16, padding: 16, marginBottom: 14 }}>
@@ -280,15 +379,14 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
           </div>
         )}
 
-        {/* Food Search */}
         {mode === "search" && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
               <div onClick={() => setMode("options")} style={{ width: 32, height: 32, borderRadius: 10, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, flexShrink: 0 }}>‹</div>
-              <input placeholder="Search Indian foods..." value={query} onChange={e => search(e.target.value)}
+              <input placeholder="Search any food..." value={query} onChange={e => search(e.target.value)}
                 style={{ flex: 1, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "10px 14px", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 14, outline: "none" }} autoFocus />
             </div>
-
+            {loading && <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", padding: "4px 0", marginBottom: 8 }}>🔍 Searching...</div>}
             {!query && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
                 {["Dal", "Rice", "Chapati", "Egg", "Chicken", "Paneer", "Dosa", "Oats", "Banana"].map(tag => (
@@ -296,7 +394,6 @@ function FoodPickerModal({ mealSlot, onAdd, onClose, calorieLimit }) {
                 ))}
               </div>
             )}
-
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {results.map(food => {
                 const m = getMultiplier(food.name);
@@ -334,7 +431,6 @@ function CreateYourPlan({ profile, onBack }) {
   const nutrition = calculateNutrition(profile);
   const targetCalories = nutrition.calories;
 
-  // Meal slots with calorie distribution
   const MEAL_SLOTS = [
     { id: "breakfast", label: "Breakfast", icon: "🌅", time: "7-9 AM", targetPct: 0.25, color: "#FFD93D" },
     { id: "lunch", label: "Lunch", icon: "☀️", time: "12-2 PM", targetPct: 0.35, color: "#FF6B6B" },
@@ -347,8 +443,7 @@ function CreateYourPlan({ profile, onBack }) {
     if (saved && saved.date === getTodayKey()) return saved.meals;
     return { breakfast: [], lunch: [], snacks: [], dinner: [] };
   });
-
-  const [activePicker, setActivePicker] = useState(null); // which meal slot
+  const [activePicker, setActivePicker] = useState(null);
   const [saved, setSaved] = useState(false);
 
   const totalConsumed = Object.values(plan).flat().reduce((s, f) => s + (f.calories || 0), 0);
@@ -356,19 +451,11 @@ function CreateYourPlan({ profile, onBack }) {
   const totalCarbs = Object.values(plan).flat().reduce((s, f) => s + (f.carbs || 0), 0);
   const totalFat = Object.values(plan).flat().reduce((s, f) => s + (f.fat || 0), 0);
 
-  const addFood = (slot, food) => {
-    setPlan(prev => ({ ...prev, [slot]: [...prev[slot], food] }));
-    setSaved(false);
-  };
-
-  const removeFood = (slot, idx) => {
-    setPlan(prev => ({ ...prev, [slot]: prev[slot].filter((_, i) => i !== idx) }));
-    setSaved(false);
-  };
+  const addFood = (slot, food) => { setPlan(prev => ({ ...prev, [slot]: [...prev[slot], food] })); setSaved(false); };
+  const removeFood = (slot, idx) => { setPlan(prev => ({ ...prev, [slot]: prev[slot].filter((_, i) => i !== idx) })); setSaved(false); };
 
   const savePlan = () => {
     saveMyPlan({ date: getTodayKey(), meals: plan });
-    // Also save to daily progress
     const prog = getProgress();
     const key = getTodayKey();
     if (!prog[key]) prog[key] = { meals: {}, water: 0, weight: "", foodLog: [] };
@@ -380,14 +467,10 @@ function CreateYourPlan({ profile, onBack }) {
   };
 
   const getMealCalories = (slot) => plan[slot].reduce((s, f) => s + (f.calories || 0), 0);
-  const getMealTarget = (slot) => {
-    const s = MEAL_SLOTS.find(m => m.id === slot);
-    return Math.round(targetCalories * (s?.targetPct || 0.25));
-  };
+  const getMealTarget = (slot) => { const s = MEAL_SLOTS.find(m => m.id === slot); return Math.round(targetCalories * (s?.targetPct || 0.25)); };
 
   return (
     <div style={{ padding: "0 16px 100px" }}>
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <div onClick={onBack} style={{ width: 36, height: 36, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>‹</div>
         <div>
@@ -396,10 +479,8 @@ function CreateYourPlan({ profile, onBack }) {
         </div>
       </div>
 
-      {/* Calorie progress bar */}
       <CalorieBar consumed={totalConsumed} target={targetCalories} />
 
-      {/* Macro summary */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
         {[
           { label: "Protein", consumed: totalProtein, target: nutrition.protein, unit: "g", color: "#4D96FF" },
@@ -421,22 +502,18 @@ function CreateYourPlan({ profile, onBack }) {
         })}
       </div>
 
-      {/* Meal Slots */}
       {MEAL_SLOTS.map(slot => {
         const foods = plan[slot.id];
         const slotCals = getMealCalories(slot.id);
         const slotTarget = getMealTarget(slot.id);
         const slotPct = Math.min((slotCals / slotTarget) * 100, 100);
-
         return (
           <div key={slot.id} style={{ background: "var(--card)", border: `1px solid ${slot.color}20`, borderRadius: 20, marginBottom: 12, overflow: "hidden" }}>
-            {/* Slot Header */}
             <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, borderBottom: foods.length > 0 ? "1px solid var(--border)" : "none" }}>
               <div style={{ width: 42, height: 42, borderRadius: 13, background: `${slot.color}15`, border: `1px solid ${slot.color}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{slot.icon}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{slot.label}</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>{slot.time} • Target: ~{slotTarget} cal</div>
-                {/* Mini progress bar */}
                 {slotCals > 0 && (
                   <div style={{ background: "var(--surface)", borderRadius: 3, height: 3, marginTop: 5, overflow: "hidden" }}>
                     <div style={{ width: `${slotPct}%`, height: "100%", background: slot.color, borderRadius: 3, transition: "width 0.6s" }} />
@@ -444,16 +521,10 @@ function CreateYourPlan({ profile, onBack }) {
                 )}
               </div>
               <div style={{ textAlign: "right" }}>
-                {slotCals > 0 && (
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, color: slot.color, marginBottom: 4 }}>{slotCals} cal</div>
-                )}
-                <div onClick={() => setActivePicker(slot.id)} style={{ padding: "6px 12px", borderRadius: 20, background: `${slot.color}15`, border: `1px solid ${slot.color}30`, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: slot.color, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  + Add
-                </div>
+                {slotCals > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 800, color: slot.color, marginBottom: 4 }}>{slotCals} cal</div>}
+                <div onClick={() => setActivePicker(slot.id)} style={{ padding: "6px 12px", borderRadius: 20, background: `${slot.color}15`, border: `1px solid ${slot.color}30`, fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: slot.color, cursor: "pointer", whiteSpace: "nowrap" }}>+ Add</div>
               </div>
             </div>
-
-            {/* Food items */}
             {foods.length > 0 && (
               <div style={{ padding: "8px 16px 12px" }}>
                 {foods.map((food, idx) => (
@@ -466,10 +537,8 @@ function CreateYourPlan({ profile, onBack }) {
                 ))}
               </div>
             )}
-
-            {/* Empty state */}
             {foods.length === 0 && (
-              <div onClick={() => setActivePicker(slot.id)} style={{ padding: "12px 16px 14px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <div onClick={() => setActivePicker(slot.id)} style={{ padding: "12px 16px 14px", cursor: "pointer" }}>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted2)" }}>Tap to add {slot.label.toLowerCase()} items...</div>
               </div>
             )}
@@ -477,7 +546,6 @@ function CreateYourPlan({ profile, onBack }) {
         );
       })}
 
-      {/* Summary & Save */}
       <div style={{ background: "linear-gradient(135deg, rgba(77,150,255,0.08), rgba(132,94,247,0.08))", border: "1px solid rgba(77,150,255,0.15)", borderRadius: 20, padding: 16, marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>📊 Plan Summary</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
@@ -498,31 +566,20 @@ function CreateYourPlan({ profile, onBack }) {
         </div>
       </div>
 
-      <button onClick={savePlan} style={{ width: "100%", padding: 16, border: "none", borderRadius: 16, background: saved ? "linear-gradient(135deg,#51CF66,#20C997)" : "linear-gradient(135deg,#4D96FF,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(77,150,255,0.3)", transition: "background 0.3s", marginBottom: 10 }}>
+      <button onClick={savePlan} style={{ width: "100%", padding: 16, border: "none", borderRadius: 16, background: saved ? "linear-gradient(135deg,#51CF66,#20C997)" : "linear-gradient(135deg,#4D96FF,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
         {saved ? "✅ Plan Saved!" : "💾 Save Today's Plan"}
       </button>
 
-      <div style={{ textAlign: "center", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>
-        Plan saved to Daily Progress automatically
-      </div>
-
-      {/* Food Picker Modal */}
       {activePicker && (
-        <FoodPickerModal
-          mealSlot={activePicker}
-          onAdd={addFood}
-          onClose={() => setActivePicker(null)}
-          calorieLimit={getMealTarget(activePicker) - getMealCalories(activePicker)}
-        />
+        <FoodPickerModal mealSlot={activePicker} onAdd={addFood} onClose={() => setActivePicker(null)} calorieLimit={getMealTarget(activePicker) - getMealCalories(activePicker)} />
       )}
     </div>
   );
 }
 
-// ─── SCREEN 1: LANDING ───────────────────────────────────────────────────────
+// ─── FITNESS LANDING ──────────────────────────────────────────────────────────
 function FitnessLanding({ onSelect, profile }) {
   const nutrition = profile ? calculateNutrition(profile) : null;
-
   const options = [
     { id: "create_plan", icon: "📋", label: "Create Your Plan", desc: "Build daily meals within calorie target", color: "#06D6A0", glow: "rgba(6,214,160,0.2)", badge: "FREE" },
     { id: "scanner", icon: "📷", label: "Calorie Scanner", desc: "Photo → instant calories", color: "#FF6B6B", glow: "rgba(255,107,107,0.2)" },
@@ -540,7 +597,6 @@ function FitnessLanding({ onSelect, profile }) {
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginTop: 4 }}>AI-powered nutrition & workout planning</div>
       </div>
 
-      {/* Calorie targets card */}
       {nutrition && (
         <div style={{ background: "linear-gradient(135deg, rgba(77,150,255,0.1), rgba(132,94,247,0.1))", border: "1px solid rgba(77,150,255,0.2)", borderRadius: 22, padding: 20, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
@@ -833,61 +889,7 @@ function CalorieScanner({ onBack }) {
         </div>
       )}
 
-      {mode === "search" && (
-        <FoodSearch onAdd={addToLog} onBack={() => setMode("options")} />
-      )}
-    </div>
-  );
-}
-
-// ─── FOOD SEARCH ─────────────────────────────────────────────────────────────
-function FoodSearch({ onAdd, onBack }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-  const [qty, setQty] = useState({});
-  const search = (q) => { setQuery(q); if (!q.trim()) { setResults([]); return; } setResults(FOOD_DB.filter(f => f.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8)); };
-  const getM = (name) => parseFloat(qty[name] || 1);
-
-  return (
-    <div>
-      {onBack && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-          <div onClick={onBack} style={{ width: 36, height: 36, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>‹</div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text)" }}>🔍 Food Search</div>
-        </div>
-      )}
-      <input placeholder="Search Indian foods..." value={query} onChange={e => search(e.target.value)}
-        style={{ width: "100%", background: "var(--card)", border: "1.5px solid var(--border)", borderRadius: 14, padding: "13px 16px", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 12 }} autoFocus />
-      {!query && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-          {["Dal", "Chapati", "Rice", "Egg", "Chicken", "Paneer", "Dosa", "Oats"].map(tag => (
-            <div key={tag} onClick={() => search(tag)} style={{ padding: "6px 14px", borderRadius: 20, background: "var(--card)", border: "1px solid var(--border)", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>{tag}</div>
-          ))}
-        </div>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {results.map(food => {
-          const m = getM(food.name);
-          return (
-            <div key={food.name} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 14, padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{food.name}</div>
-                <div style={{ display: "flex", gap: 8, marginTop: 3 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#FF6B6B" }}>{Math.round(food.cal * m)} cal</span>
-                  <span style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>P:{Math.round(food.protein * m)}g C:{Math.round(food.carbs * m)}g</span>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <div onClick={() => setQty(q => ({ ...q, [food.name]: Math.max(0.5, parseFloat(q[food.name] || 1) - 0.5).toString() }))} style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>−</div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, minWidth: 20, textAlign: "center" }}>{qty[food.name] || 1}x</span>
-                <div onClick={() => setQty(q => ({ ...q, [food.name]: (parseFloat(q[food.name] || 1) + 0.5).toString() }))} style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>+</div>
-              </div>
-              <div onClick={() => onAdd({ ...food, calories: Math.round(food.cal * m), foodName: food.name, protein: Math.round(food.protein * m), carbs: Math.round(food.carbs * m), fat: Math.round(food.fat * m) })}
-                style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(81,207,102,0.15)", border: "1px solid rgba(81,207,102,0.3)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16 }}>✓</div>
-            </div>
-          );
-        })}
-      </div>
+      {mode === "search" && <FoodSearch onAdd={addToLog} onBack={() => setMode("options")} />}
     </div>
   );
 }
@@ -957,7 +959,7 @@ function AIDietPlan({ profile, onBack }) {
         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>One-time • Instant access</div>
       </div>
       {error && <div style={{ background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 12, padding: 12, marginBottom: 12, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B" }}>⚠️ {error}</div>}
-      <button onClick={handlePayAndGenerate} disabled={payStep === "paying"} style={{ width: "100%", padding: 16, border: "none", borderRadius: 16, background: "linear-gradient(135deg,#845EF7,#4D96FF)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(132,94,247,0.4)", marginBottom: 10 }}>
+      <button onClick={handlePayAndGenerate} disabled={payStep === "paying"} style={{ width: "100%", padding: 16, border: "none", borderRadius: 16, background: "linear-gradient(135deg,#845EF7,#4D96FF)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 16, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}>
         {payStep === "paying" ? "Opening Payment..." : "💳 Pay ₹20 & Get My Plan"}
       </button>
       <div style={{ textAlign: "center", fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>🔒 Secure via Razorpay</div>
@@ -1119,7 +1121,14 @@ export default function FitnessCoach() {
         <div onClick={() => setScreen("landing")} style={{ width: 36, height: 36, borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 18 }}>‹</div>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "var(--text)" }}>🔍 Food Search</div>
       </div>
-      <FoodSearch onAdd={(food) => { const key = getTodayKey(); const p = getProgress(); if (!p[key]) p[key] = { foodLog: [], water: 0, meals: {} }; p[key].foodLog = [...(p[key].foodLog || []), { ...food, time: new Date().toLocaleTimeString() }]; saveProgress(p); setScreen("landing"); }} />
+      <FoodSearch onAdd={(food) => {
+        const key = getTodayKey();
+        const p = getProgress();
+        if (!p[key]) p[key] = { foodLog: [], water: 0, meals: {} };
+        p[key].foodLog = [...(p[key].foodLog || []), { ...food, time: new Date().toLocaleTimeString() }];
+        saveProgress(p);
+        setScreen("landing");
+      }} />
     </div>
   );
   if (screen === "ai_plan") return <AIDietPlan profile={profile} onBack={() => setScreen("landing")} />;
