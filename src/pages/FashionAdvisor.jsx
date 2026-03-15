@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
 import { fashionAPI } from "../utils/api";
 
 const OCCASIONS = ["Casual", "Work/Office", "Party", "Wedding", "Date Night", "Gym", "Festival", "Formal"];
@@ -8,6 +9,7 @@ const UPLOAD_MODES = [
 ];
 
 export default function FashionAdvisor() {
+  const { getPhoto } = useCapacitorCamera();
   const [occasion, setOccasion] = useState("");
   const [uploadMode, setUploadMode] = useState("outfit");
   const [imageBase64, setImageBase64] = useState(null);
@@ -15,55 +17,18 @@ export default function FashionAdvisor() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-  const fileRef = useRef();
-  const cameraRef = useRef();
 
-  const handleImage = (file) => {
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) {
-      setError("Image too large! Use an image under 15MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          const MAX = 800;
-          let w = img.width;
-          let h = img.height;
-          if (w > MAX || h > MAX) {
-            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-            else { w = Math.round(w * MAX / h); h = MAX; }
-          }
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, w, h);
-          // toDataURL gives "data:image/jpeg;base64,XXXX"
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-          // split on comma — [0] = "data:image/jpeg;base64", [1] = pure base64
-          const parts = dataUrl.split(",");
-          const pureBase64 = parts[1];
-          setImageBase64(pureBase64);
-          setImagePreview(dataUrl);
-          setError("");
-        } catch (err) {
-          setError("Could not process image. Try another file.");
-        }
-      };
-      img.onerror = () => setError("Could not read image. Try another file.");
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+  const handleCapture = async (source) => {
+    setError("");
+    const { base64, dataUrl, error: err } = await getPhoto(source);
+    if (err || !base64) return;
+    setImageBase64(base64);
+    setImagePreview(dataUrl);
   };
 
   const removeImage = () => {
     setImageBase64(null);
     setImagePreview(null);
-    if (fileRef.current) fileRef.current.value = "";
-    if (cameraRef.current) cameraRef.current.value = "";
   };
 
   const handleModeChange = (mode) => {
@@ -73,26 +38,26 @@ export default function FashionAdvisor() {
   };
 
   const analyze = async () => {
-    if (!occasion) return setError("Please select an occasion!");
-    if (!imageBase64) return setError("Please upload an image first!");
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      // imageBase64 is pure base64 string only — no data: prefix
-      const body = { occasion, uploadMode, mediaType: "image/jpeg" };
-      if (imageBase64 && typeof imageBase64 === "string" && imageBase64.length > 10) {
-        body.imageBase64 = imageBase64;
-      }
-      const res = await fashionAPI.analyze(body);
-      setResult(res.data.result);
-      const prev = parseInt(localStorage.getItem("glowup_fashion_count") || "0");
-      localStorage.setItem("glowup_fashion_count", prev + 1);
-    } catch (err) {
-      setError(err.response?.data?.error || "Something went wrong. Try again!");
+  if (!occasion) return setError("Please select an occasion!");
+  // Image optional rakho — sirf occasion required
+  setLoading(true);
+  setError("");
+  setResult(null);
+  try {
+    const body = { occasion, uploadMode, mediaType: "image/jpeg" };
+    // Only add image if it's a valid string
+    if (imageBase64 && typeof imageBase64 === "string" && imageBase64.length > 100) {
+      body.imageBase64 = imageBase64;
     }
-    setLoading(false);
-  };
+    const res = await fashionAPI.analyze(body);
+    setResult(res.data.result);
+    const prev = parseInt(localStorage.getItem("glowup_fashion_count") || "0");
+    localStorage.setItem("glowup_fashion_count", prev + 1);
+  } catch (err) {
+    setError(err.response?.data?.error || "Something went wrong. Try again!");
+  }
+  setLoading(false);
+};
 
   const reset = () => {
     setResult(null);
@@ -102,7 +67,7 @@ export default function FashionAdvisor() {
     setError("");
   };
 
-  const canAnalyze = occasion && imageBase64 && !loading;
+  const canAnalyze = occasion && !loading;
 
   return (
     <div style={{ padding: "0 16px 100px" }}>
@@ -160,19 +125,15 @@ export default function FashionAdvisor() {
                 : "AI will match styles to your face shape & skin tone"}
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => fileRef.current?.click()}
+              <button onClick={() => handleCapture("gallery")}
                 style={{ padding: "10px 20px", borderRadius: 12, border: "1.5px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 🖼️ Gallery
               </button>
-              <button onClick={() => cameraRef.current?.click()}
+              <button onClick={() => handleCapture("camera")}
                 style={{ padding: "10px 20px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#845EF7,#FF6B9D)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(132,94,247,0.4)" }}>
                 📷 Camera
               </button>
             </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={(e) => handleImage(e.target.files[0])} />
-            <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
-              onChange={(e) => handleImage(e.target.files[0])} />
           </div>
         ) : (
           <div style={{ background: "var(--card)", borderRadius: 20, border: "1px solid var(--border)", overflow: "hidden", position: "relative" }}>

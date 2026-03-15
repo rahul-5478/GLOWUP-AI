@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { faceAPI } from "../utils/api";
-import { GlowButton, SectionTitle, Card, LoadingDots, ImageUploader, ResultCard, ErrorMessage } from "../components/UI";
+import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
+import { GlowButton, SectionTitle, Card, LoadingDots, ResultCard, ErrorMessage } from "../components/UI";
 import { useLang } from "../hooks/useLanguage";
 
 const HAIRSTYLE_IMAGES = {
@@ -16,7 +17,6 @@ const HAIRSTYLE_IMAGES = {
 };
 
 function getHairImage(style) {
-  // Handle both string and object
   const styleName = typeof style === "object" && style !== null ? style.name : style;
   if (!styleName || typeof styleName !== "string") return HAIRSTYLE_IMAGES.default;
   const s = styleName.toLowerCase();
@@ -28,24 +28,30 @@ function getHairImage(style) {
 
 export default function FaceAnalysis() {
   const { t } = useLang();
+  const { getPhoto } = useCapacitorCamera();
   const [imagePreview, setImagePreview] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
-  const [mediaType, setMediaType] = useState("image/jpeg");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  const handleUpload = (preview, base64, mime) => {
-    setImagePreview(preview); setImageBase64(base64); setMediaType(mime);
-    setResult(null); setError("");
+  const handleCapture = async (source) => {
+    setError("");
+    const { base64, dataUrl, error: err } = await getPhoto(source);
+    if (err || !base64) return;
+    setImageBase64(base64);
+    setImagePreview(dataUrl);
+    setResult(null);
   };
 
   const analyze = async () => {
     if (!imageBase64) return;
     setLoading(true); setError(""); setResult(null);
     try {
-      const res = await faceAPI.analyze(imageBase64, mediaType);
+      const res = await faceAPI.analyze(imageBase64, "image/jpeg");
       setResult(res.data.result);
+      const prev = parseInt(localStorage.getItem("glowup_face_count") || "0");
+      localStorage.setItem("glowup_face_count", prev + 1);
     } catch (err) {
       setError(err.response?.data?.error || "Analysis failed. Please try with a clearer selfie.");
     }
@@ -55,10 +61,34 @@ export default function FaceAnalysis() {
   return (
     <div style={{ padding: "0 16px 100px" }} className="tab-content">
       <SectionTitle icon="✨" title={t.faceTitle} subtitle={t.faceSubtitle} />
-      <ImageUploader label={t.uploadSelfie} preview={imagePreview} onUpload={handleUpload} icon="🤳" />
+
+      {/* Upload Buttons */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <button onClick={() => handleCapture("gallery")}
+          style={{ padding: "13px 10px", border: "1.5px solid var(--border)", borderRadius: 14, background: "var(--card)", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+          🖼️ Gallery
+        </button>
+        <button onClick={() => handleCapture("camera")}
+          style={{ padding: "13px 10px", border: "none", borderRadius: 14, background: "linear-gradient(135deg,#FF6B6B,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, boxShadow: "0 4px 16px rgba(255,107,107,0.4)" }}>
+          📷 Camera
+        </button>
+      </div>
+
+      {/* Preview */}
+      {imagePreview && (
+        <div style={{ position: "relative", marginBottom: 14, borderRadius: 20, overflow: "hidden" }}>
+          <img src={imagePreview} alt="selfie"
+            style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)", borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16 }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>✅ Photo ready!</div>
+          </div>
+        </div>
+      )}
+
       <ErrorMessage message={error} />
+
       {imagePreview && !loading && (
-        <GlowButton onClick={analyze} style={{ marginTop: 14 }}>{t.analyzeBtn}</GlowButton>
+        <GlowButton onClick={analyze} style={{ marginTop: 4 }}>{t.analyzeBtn}</GlowButton>
       )}
 
       {loading && (
@@ -71,10 +101,7 @@ export default function FaceAnalysis() {
       {result && (
         <div style={{ marginTop: 16 }}>
           {/* Face Profile */}
-          <div style={{
-            background: "linear-gradient(135deg, var(--card) 0%, var(--surface) 100%)",
-            borderRadius: 20, padding: 20, border: "1px solid var(--border)", marginBottom: 12,
-          }}>
+          <div style={{ background: "linear-gradient(135deg, var(--card) 0%, var(--surface) 100%)", borderRadius: 20, padding: 20, border: "1px solid var(--border)", marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
               <div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 20, color: "var(--text)", fontWeight: 700 }}>{result.faceShape} Face</div>
@@ -89,22 +116,16 @@ export default function FaceAnalysis() {
             <p style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--muted)", margin: 0, lineHeight: 1.6 }}>{result.faceShapeDetails}</p>
           </div>
 
-          {/* Hairstyle Cards with Images */}
+          {/* Hairstyle Cards */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "var(--text)", marginBottom: 12, fontWeight: 700 }}>💇 {t.bestHairstyles}</div>
             {result.topHairstyles?.map((style, i) => {
-              // Handle both string and object format
               const styleName = typeof style === "object" && style !== null ? style.name : style;
               const styleReason = typeof style === "object" && style !== null ? style.reason : "";
               const styleMaintenance = typeof style === "object" && style !== null ? style.maintenance : "";
               const imgUrl = getHairImage(style);
-
               return (
-                <div key={i} style={{
-                  background: "var(--card)", border: "1px solid var(--border)",
-                  borderRadius: 16, overflow: "hidden", marginBottom: 10,
-                  display: "flex", alignItems: "stretch",
-                }}>
+                <div key={i} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, overflow: "hidden", marginBottom: 10, display: "flex", alignItems: "stretch" }}>
                   <img src={imgUrl} alt="hairstyle" style={{ width: 90, objectFit: "cover", flexShrink: 0 }}
                     onError={e => { e.target.src = HAIRSTYLE_IMAGES.default; }} />
                   <div style={{ padding: "12px 14px" }}>
@@ -117,7 +138,7 @@ export default function FaceAnalysis() {
             })}
           </div>
 
-          {/* Skincare Section */}
+          {/* Skincare */}
           {result.skincare && (
             <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12 }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 15, color: "var(--text)", fontWeight: 700, marginBottom: 10 }}>🧴 Skincare Routine</div>

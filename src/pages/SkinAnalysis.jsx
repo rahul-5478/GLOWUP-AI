@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { skinAPI } from "../utils/api";
+import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
 
 const GRADE_CONFIG = {
   A: { color: "#4ade80", bg: "rgba(74,222,128,0.12)", label: "Excellent", emoji: "✨" },
@@ -10,22 +11,12 @@ const GRADE_CONFIG = {
 const SEVERITY_COLOR = { Mild: "#4ade80", Moderate: "#facc15", Severe: "#f87171" };
 const STEP_ICONS = { Cleanser: "🧴", Toner: "💧", Serum: "✨", Moisturizer: "🌿", Sunscreen: "☀️", "Eye Cream": "👁️", Exfoliator: "🔄", Mask: "🎭", default: "💊" };
 
-// ── Helper: always returns an array ──────────────────────────────────────────
 const toArray = (val) => {
   if (!val) return [];
   if (Array.isArray(val)) return val;
   if (typeof val === "string") return val.split(",").map(s => s.trim()).filter(Boolean);
   return [String(val)];
 };
-
-function toBase64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
 
 function ScoreRing({ score, grade }) {
   const cfg = GRADE_CONFIG[grade] || GRADE_CONFIG["B"];
@@ -73,7 +64,6 @@ function ProductCard({ product, index }) {
   const [open, setOpen] = useState(index === 0);
   const icon = STEP_ICONS[product.category] || STEP_ICONS.default;
   const timeColor = product.timeOfDay === "Morning" ? "#facc15" : "#818cf8";
-  // ✅ Safe array for targetsProblems
   const targets = toArray(product.targetsProblems);
   return (
     <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
@@ -120,12 +110,9 @@ function WeekCard({ weekNum, weekData }) {
   const [open, setOpen] = useState(weekNum === "week1");
   const colors = ["#60a5fa", "#a78bfa", "#34d399", "#f97316"];
   const col = colors[["week1","week2","week3","week4"].indexOf(weekNum)] || colors[0];
-
-  // ✅ Safe arrays — handles string, array, undefined, null
   const morningItems = toArray(weekData?.morning);
-  const nightItems   = toArray(weekData?.night);
-  const avoidItems   = toArray(weekData?.avoid);
-
+  const nightItems = toArray(weekData?.night);
+  const avoidItems = toArray(weekData?.avoid);
   return (
     <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${col}30`, borderRadius: 18, marginBottom: 10, overflow: "hidden" }}>
       <div onClick={() => setOpen(!open)} style={{ padding: 16, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -143,25 +130,19 @@ function WeekCard({ weekNum, weekData }) {
             {morningItems.length > 0 && (
               <div>
                 <div style={{ fontSize: 11, color: "#facc15", fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>☀️ MORNING</div>
-                {morningItems.map((s, i) => (
-                  <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(250,204,21,0.3)" }}>{s}</div>
-                ))}
+                {morningItems.map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(250,204,21,0.3)" }}>{s}</div>)}
               </div>
             )}
             {nightItems.length > 0 && (
               <div>
                 <div style={{ fontSize: 11, color: "#818cf8", fontWeight: 700, marginBottom: 6, letterSpacing: 1 }}>🌙 NIGHT</div>
-                {nightItems.map((s, i) => (
-                  <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(129,140,248,0.3)" }}>{s}</div>
-                ))}
+                {nightItems.map((s, i) => <div key={i} style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", padding: "4px 0", paddingLeft: 12, borderLeft: "2px solid rgba(129,140,248,0.3)" }}>{s}</div>)}
               </div>
             )}
             {avoidItems.length > 0 && (
               <div style={{ background: "rgba(248,113,113,0.06)", borderRadius: 10, padding: "10px 12px" }}>
                 <div style={{ fontSize: 11, color: "#f87171", fontWeight: 700, marginBottom: 4 }}>❌ AVOID</div>
-                {avoidItems.map((a, i) => (
-                  <div key={i} style={{ fontSize: 12, color: "rgba(248,113,113,0.7)" }}>{a}</div>
-                ))}
+                {avoidItems.map((a, i) => <div key={i} style={{ fontSize: 12, color: "rgba(248,113,113,0.7)" }}>{a}</div>)}
               </div>
             )}
             {weekData.expectedResult && (
@@ -177,8 +158,8 @@ function WeekCard({ weekNum, weekData }) {
   );
 }
 
-// ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function SkinAnalysis() {
+  const { getPhoto } = useCapacitorCamera();
   const [imagePreview, setImagePreview] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -186,39 +167,13 @@ export default function SkinAnalysis() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
-  const galleryRef = useRef();
-
-  const handleFile = async (file) => {
-    if (!file) return;
-    setImagePreview(URL.createObjectURL(file));
-    setImageBase64(await toBase64(file));
-    setResult(null);
+  const handleCapture = async (source) => {
     setError("");
-  };
-
-  const openGallery = () => {
-    galleryRef.current.value = "";
-    galleryRef.current.click();
-  };
-
-  const openCamera = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.setAttribute("capture", "user");
-    input.style.display = "none";
-    document.body.appendChild(input);
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        setImagePreview(URL.createObjectURL(file));
-        setImageBase64(await toBase64(file));
-        setResult(null);
-        setError("");
-      }
-      document.body.removeChild(input);
-    };
-    input.click();
+    const { base64, dataUrl, error: err } = await getPhoto(source);
+    if (err || !base64) return;
+    setImageBase64(base64);
+    setImagePreview(dataUrl);
+    setResult(null);
   };
 
   const analyze = async () => {
@@ -228,7 +183,6 @@ export default function SkinAnalysis() {
       const res = await skinAPI.analyze({ imageBase64, mediaType: "image/jpeg" });
       setResult(res.data.result);
       setActiveTab("overview");
-      // Update scan counter
       const prev = parseInt(localStorage.getItem("glowup_skin_count") || "0");
       localStorage.setItem("glowup_skin_count", prev + 1);
     } catch (err) {
@@ -247,21 +201,15 @@ export default function SkinAnalysis() {
 
   return (
     <div style={{ padding: "0 16px 100px" }}>
-
-      <input ref={galleryRef} type="file" accept="image/*" style={{ display: "none" }}
-        onChange={e => handleFile(e.target.files[0])} />
-
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 24, fontWeight: 800, color: "#f0f0ff", fontFamily: "var(--font-display)", marginBottom: 4 }}>
           Skin <span style={{ background: "linear-gradient(135deg, #f87171, #fb923c)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Analyzer</span>
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
-          Face++ AI scan · Product plan · 4-week treatment
-        </div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Face++ AI scan · Product plan · 4-week treatment</div>
       </div>
 
-      {/* Preview or placeholder */}
+      {/* Preview */}
       {imagePreview ? (
         <div style={{ position: "relative", marginBottom: 16, borderRadius: 20, overflow: "hidden" }}>
           <img src={imagePreview} alt="skin" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
@@ -270,23 +218,21 @@ export default function SkinAnalysis() {
           </div>
         </div>
       ) : (
-        <div onClick={openGallery} style={{ background: "rgba(255,255,255,0.02)", border: "1.5px dashed rgba(255,255,255,0.1)", borderRadius: 20, marginBottom: 16, cursor: "pointer", minHeight: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div onClick={() => handleCapture("gallery")} style={{ background: "rgba(255,255,255,0.02)", border: "1.5px dashed rgba(255,255,255,0.1)", borderRadius: 20, marginBottom: 16, cursor: "pointer", minHeight: 180, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ textAlign: "center", padding: 28 }}>
             <div style={{ fontSize: 44, marginBottom: 10 }}>🤳</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0ff", marginBottom: 6 }}>Upload Your Selfie</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.7 }}>
-              Face++ AI will scan your skin<br />Acne · Dark spots · Pores · Pigmentation
-            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.7 }}>Face++ AI will scan your skin<br />Acne · Dark spots · Pores · Pigmentation</div>
           </div>
         </div>
       )}
 
       {/* Buttons */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-        <button onClick={openCamera} style={{ padding: "13px 10px", border: "1.5px solid rgba(248,113,113,0.35)", borderRadius: 14, background: "rgba(248,113,113,0.08)", color: "#f87171", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <button onClick={() => handleCapture("camera")} style={{ padding: "13px 10px", border: "1.5px solid rgba(248,113,113,0.35)", borderRadius: 14, background: "rgba(248,113,113,0.08)", color: "#f87171", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           📸 Take Photo
         </button>
-        <button onClick={openGallery} style={{ padding: "13px 10px", border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 14, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.65)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <button onClick={() => handleCapture("gallery")} style={{ padding: "13px 10px", border: "1.5px solid rgba(255,255,255,0.1)", borderRadius: 14, background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.65)", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           🖼️ Gallery
         </button>
       </div>
@@ -303,9 +249,7 @@ export default function SkinAnalysis() {
           <div style={{ fontSize: 15, fontWeight: 700, color: "#f0f0ff", marginBottom: 8 }}>Scanning Your Skin...</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.8 }}>Face++ AI is detecting acne, dark spots,<br />pores, pigmentation and more...</div>
           <div style={{ marginTop: 16, display: "flex", gap: 6, justifyContent: "center" }}>
-            {[0,1,2,3].map(i => (
-              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171", animation: `bounce 1.4s ease-in-out ${i * 0.2}s infinite` }} />
-            ))}
+            {[0,1,2,3].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171", animation: `bounce 1.4s ease-in-out ${i * 0.2}s infinite` }} />)}
           </div>
           <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}`}</style>
         </div>
@@ -317,10 +261,8 @@ export default function SkinAnalysis() {
         </div>
       )}
 
-      {/* Results */}
       {result && (
         <div>
-          {/* Score card */}
           <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24, marginBottom: 16 }}>
             <ScoreRing score={result.skinScore} grade={result.grade} />
             {result.faceAnalysis?.verifiedByFacePP && (
@@ -358,7 +300,6 @@ export default function SkinAnalysis() {
             ))}
           </div>
 
-          {/* Overview */}
           {activeTab === "overview" && (
             <div>
               {result.dermatologistNote && (
@@ -391,69 +332,23 @@ export default function SkinAnalysis() {
                   <div style={{ fontSize: 13, color: "rgba(251,146,60,0.8)", lineHeight: 1.6 }}>{result.estimatedResults}</div>
                 </div>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[{ tab: "products", icon: "🧴", label: "See Products", color: "#60a5fa" }, { tab: "plan", icon: "📅", label: "4-Week Plan", color: "#a78bfa" }].map(btn => (
-                  <button key={btn.tab} onClick={() => setActiveTab(btn.tab)} style={{ padding: "14px", border: `1px solid ${btn.color}30`, borderRadius: 14, background: `${btn.color}08`, color: btn.color, fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                    {btn.icon} {btn.label}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
-          {/* Problems */}
           {activeTab === "problems" && (
             <div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Based on real Face++ skin scan · Tap for details</div>
-              {result.faceAnalysis?.skinRawData && (
-                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, color: "#60a5fa", fontWeight: 700, marginBottom: 12 }}>📊 FACE++ SCAN DATA</div>
-                  {Object.entries(result.faceAnalysis.skinRawData).map(([key, val]) => {
-                    const labels = { acne: "Acne", darkCircle: "Dark Circles", skinSpot: "Dark Spots", pores: "Pores", wrinkle: "Wrinkles", eyePouch: "Eye Bags", blackheads: "Blackheads", whiteheads: "Whiteheads", nasolabialFold: "Nasolabial Folds" };
-                    const pct = Math.round(val);
-                    const col = pct < 30 ? "#4ade80" : pct < 60 ? "#facc15" : "#f87171";
-                    return (
-                      <div key={key} style={{ marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.55)" }}>{labels[key] || key}</span>
-                          <span style={{ fontSize: 12, color: col, fontWeight: 700 }}>{pct}%</span>
-                        </div>
-                        <div style={{ background: "rgba(255,255,255,0.05)", borderRadius: 4, height: 4 }}>
-                          <div style={{ width: `${pct}%`, height: "100%", background: col, borderRadius: 4 }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Tap for details</div>
               {toArray(result.detectedProblems).map((p, i) => <ProblemCard key={i} problem={typeof p === "object" ? p : { name: p, severity: "Mild", affectedArea: "Face", urgency: "Low", severityPercent: 30 }} />)}
             </div>
           )}
 
-          {/* Products */}
           {activeTab === "products" && (
             <div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Indian products · Budget-friendly · Tap for details</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Indian products · Tap for details</div>
               {toArray(result.productPlan).map((p, i) => <ProductCard key={i} product={p} index={i} />)}
-              {toArray(result.weeklyTreatments).length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>🗓 WEEKLY TREATMENTS</div>
-                  {toArray(result.weeklyTreatments).map((t, i) => (
-                    <div key={i} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: 14, marginBottom: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>{t.day}</span>
-                        <span style={{ fontSize: 12, color: "#4ade80" }}>{t.price}</span>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#f0f0ff", marginBottom: 4 }}>{t.treatment} · {t.product}</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>{t.instructions}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
-          {/* Plan */}
           {activeTab === "plan" && result.treatmentPlan && (
             <div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Follow consistently · Tap week to expand</div>
@@ -463,7 +358,6 @@ export default function SkinAnalysis() {
             </div>
           )}
 
-          {/* Diet */}
           {activeTab === "diet" && (
             <div>
               {toArray(result.ingredientsToUse).length > 0 && (
