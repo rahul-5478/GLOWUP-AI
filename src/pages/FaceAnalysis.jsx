@@ -5,7 +5,7 @@ import { GlowButton, SectionTitle, Card, LoadingDots, ResultCard, ErrorMessage }
 import { useLang } from "../hooks/useLanguage";
 import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
 
-// ─── Hairstyle Images ─────────────────────────────────────────────────────────
+// ─── Hairstyle Images (Fallback only — Pexels se real images aayenge) ─────────
 const HAIRSTYLE_IMAGES = {
   "undercut": "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&q=80",
   "fade": "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&q=80",
@@ -157,7 +157,10 @@ const FEMALE_HAIRSTYLES = {
 };
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
-const getHairImage = (imgKey, gender) => {
+
+// ✅ UPDATED: realImage (Pexels) pehle check karo, fallback Unsplash
+const getHairImage = (imgKey, gender, realImage = null) => {
+  if (realImage) return realImage; // ✅ Pexels real image from backend
   const isFemale = gender?.toLowerCase() === "female";
   const img = HAIRSTYLE_IMAGES[imgKey];
   if (img) return img;
@@ -267,22 +270,13 @@ export default function FaceAnalysis() {
   const [activeTab, setActiveTab] = useState("hair");
   const [expandedCard, setExpandedCard] = useState(null);
   const [selectedGender, setSelectedGender] = useState(null);
-  const [mode, setMode] = useState("upload"); // "upload" | "live"
+  const [mode, setMode] = useState("upload");
 
-  // ✅ MediaPipe hook
   const {
-    videoRef,
-    canvasRef,
-    isLoading: mpLoading,
-    isReady,
-    faceDetected,
-    liveFaceShape,
-    liveJawline,
-    error: mpError,
-    startCamera,
-    stopCamera,
-    captureFrame,
-    getFaceAnalysis,
+    videoRef, canvasRef,
+    isLoading: mpLoading, isReady, faceDetected,
+    liveFaceShape, liveJawline, error: mpError,
+    startCamera, stopCamera, captureFrame, getFaceAnalysis,
   } = useMediaPipeFace();
 
   const handleCapture = async (source) => {
@@ -327,9 +321,7 @@ export default function FaceAnalysis() {
     setResult(null);
 
     try {
-      // ✅ MediaPipe data bhejo
       const mpAnalysis = getFaceAnalysis();
-
       const res = await faceAPI.analyze(imageBase64, "image/jpeg", {
         mediapipe: mpAnalysis ? {
           faceShape: mpAnalysis.faceShape,
@@ -340,7 +332,6 @@ export default function FaceAnalysis() {
       const data = res.data.result;
       data.detectedGender = selectedGender;
 
-      // ✅ MediaPipe face shape override karo
       if (mpAnalysis?.faceShape) {
         data.faceShape = mpAnalysis.faceShape;
         data.jawlineType = mpAnalysis.jawlineType;
@@ -358,6 +349,26 @@ export default function FaceAnalysis() {
   const isFemale = selectedGender === "Female" ||
     result?.detectedGender?.toLowerCase() === "female";
 
+  // ✅ Hairstyles: backend se aaye topHairstyles use karo (realImage ke saath)
+  // Agar nahi aaye toh local database fallback
+  const getDisplayHairstyles = () => {
+    if (result?.topHairstyles && result.topHairstyles.length > 0) {
+      // Backend se aaye AI hairstyles (Pexels images attached)
+      return result.topHairstyles.map(style => ({
+        name: style.name,
+        img: style.name?.toLowerCase().split(" ")[0] || "default",
+        reason: style.reason,
+        maintenance: style.maintenance || "Medium",
+        time: "10-15 min",
+        bestFor: "All hair types",
+        avoid: "Styles that add unwanted volume",
+        realImage: style.realImage || null, // ✅ Pexels image
+      }));
+    }
+    // Local fallback
+    return getHairstyles(result?.faceShape, isFemale ? "female" : "male");
+  };
+
   const RESULT_TABS = [
     { id: "hair", label: isFemale ? "💇‍♀️ Hair" : "💇‍♂️ Hair" },
     { id: "style", label: "🎨 Style" },
@@ -367,17 +378,15 @@ export default function FaceAnalysis() {
     <div style={{ padding: "0 16px 100px" }} className="tab-content">
       <SectionTitle icon="✨" title={t.faceTitle} subtitle={t.faceSubtitle} />
 
-      {/* ✅ Mode Toggle */}
+      {/* Mode Toggle */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <div
           onClick={() => { setMode("upload"); stopCamera(); setResult(null); }}
           style={{
             flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer",
             textAlign: "center",
-            background: mode === "upload" || mode === "captured"
-              ? "var(--grad1)" : "var(--card)",
-            border: `1px solid ${mode === "upload" || mode === "captured"
-              ? "transparent" : "var(--border)"}`,
+            background: mode === "upload" || mode === "captured" ? "var(--grad1)" : "var(--card)",
+            border: `1px solid ${mode === "upload" || mode === "captured" ? "transparent" : "var(--border)"}`,
             fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
             color: mode === "upload" || mode === "captured" ? "#fff" : "var(--muted)",
             transition: "all 0.2s",
@@ -389,8 +398,7 @@ export default function FaceAnalysis() {
           style={{
             flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer",
             textAlign: "center",
-            background: mode === "live"
-              ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
+            background: mode === "live" ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
             border: `1px solid ${mode === "live" ? "transparent" : "var(--border)"}`,
             fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
             color: mode === "live" ? "#fff" : "var(--muted)",
@@ -400,138 +408,58 @@ export default function FaceAnalysis() {
         </div>
       </div>
 
-      {/* ✅ LIVE MODE — MediaPipe */}
+      {/* LIVE MODE */}
       {mode === "live" && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{
-            position: "relative", borderRadius: 20, overflow: "hidden",
-            background: "#000", minHeight: 280,
-          }}>
-            <video
-              ref={videoRef}
-              autoPlay playsInline muted
-              style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }}
-            />
-            <canvas
-              ref={canvasRef}
-              style={{
-                position: "absolute", top: 0, left: 0,
-                width: "100%", height: "100%", pointerEvents: "none"
-              }}
-            />
-
-            {/* Loading overlay */}
+          <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", background: "#000", minHeight: 280 }}>
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }} />
+            <canvas ref={canvasRef}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
             {mpLoading && (
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "rgba(0,0,0,0.8)",
-                display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 12
-              }}>
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 <div style={{ fontSize: 32 }}>🔍</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>
-                  MediaPipe Loading...
-                </div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>MediaPipe Loading...</div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  {[0,1,2].map(i => (
-                    <div key={i} className="loading-dot" style={{ animationDelay: `${i*0.2}s` }} />
-                  ))}
+                  {[0,1,2].map(i => <div key={i} className="loading-dot" style={{ animationDelay: `${i*0.2}s` }} />)}
                 </div>
               </div>
             )}
-
-            {/* Face detected badge */}
             {isReady && (
-              <div style={{
-                position: "absolute", top: 12, left: 12,
-                padding: "6px 12px", borderRadius: 20,
-                background: faceDetected
-                  ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)",
-                fontFamily: "var(--font-body)", fontSize: 12,
-                fontWeight: 700, color: "#fff",
-                display: "flex", alignItems: "center", gap: 5,
-              }}>
+              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 5 }}>
                 {faceDetected ? "✅ Face Detected" : "❌ No Face — Move closer"}
               </div>
             )}
-
-            {/* MediaPipe badge */}
             {isReady && (
-              <div style={{
-                position: "absolute", top: 12, right: 12,
-                padding: "5px 10px", borderRadius: 20,
-                background: "rgba(77,150,255,0.85)",
-                fontFamily: "var(--font-body)", fontSize: 10,
-                fontWeight: 700, color: "#fff",
-              }}>
+              <div style={{ position: "absolute", top: 12, right: 12, padding: "5px 10px", borderRadius: 20, background: "rgba(77,150,255,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#fff" }}>
                 MediaPipe AI
               </div>
             )}
-
-            {/* Live face shape */}
             {faceDetected && liveFaceShape && (
-              <div style={{
-                position: "absolute", bottom: 12, left: 12, right: 12,
-                padding: "10px 14px", borderRadius: 14,
-                background: "rgba(0,0,0,0.8)",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-              }}>
+              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "10px 14px", borderRadius: 14, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
-                    Live Detection
-                  </div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "#fff", fontWeight: 800 }}>
-                    📐 {liveFaceShape?.charAt(0).toUpperCase() + liveFaceShape?.slice(1)} Face
-                  </div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Live Detection</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "#fff", fontWeight: 800 }}>📐 {liveFaceShape?.charAt(0).toUpperCase() + liveFaceShape?.slice(1)} Face</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>
-                    Jawline
-                  </div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#51CF66", fontWeight: 700 }}>
-                    {liveJawline}
-                  </div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Jawline</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#51CF66", fontWeight: 700 }}>{liveJawline}</div>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Capture button */}
           {isReady && faceDetected && (
-            <button
-              onClick={handleCaptureLive}
-              style={{
-                width: "100%", marginTop: 10, padding: "14px",
-                border: "none", borderRadius: 16,
-                background: "linear-gradient(135deg,#51CF66,#20C997)",
-                color: "#fff", fontFamily: "var(--font-body)",
-                fontSize: 15, fontWeight: 700, cursor: "pointer",
-                boxShadow: "0 8px 24px rgba(81,207,102,0.35)",
-              }}>
+            <button onClick={handleCaptureLive} style={{ width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16, background: "linear-gradient(135deg,#51CF66,#20C997)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(81,207,102,0.35)" }}>
               📸 Capture & Continue
             </button>
           )}
-
           {!isReady && !mpLoading && (
-            <div style={{
-              marginTop: 10, padding: "12px 16px",
-              background: "rgba(77,150,255,0.08)",
-              border: "1px solid rgba(77,150,255,0.2)",
-              borderRadius: 14, fontFamily: "var(--font-body)",
-              fontSize: 13, color: "#4D96FF", textAlign: "center",
-            }}>
+            <div style={{ marginTop: 10, padding: "12px 16px", background: "rgba(77,150,255,0.08)", border: "1px solid rgba(77,150,255,0.2)", borderRadius: 14, fontFamily: "var(--font-body)", fontSize: 13, color: "#4D96FF", textAlign: "center" }}>
               💡 Camera permission allow karo
             </div>
           )}
-
           {mpError && (
-            <div style={{
-              marginTop: 10, padding: "10px 14px",
-              background: "rgba(255,107,107,0.1)",
-              border: "1px solid rgba(255,107,107,0.3)",
-              borderRadius: 12, fontFamily: "var(--font-body)",
-              fontSize: 13, color: "#FF6B6B", textAlign: "center",
-            }}>
+            <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
               ⚠️ {mpError}
             </div>
           )}
@@ -543,38 +471,21 @@ export default function FaceAnalysis() {
         <>
           {mode === "upload" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              <button onClick={() => handleCapture("gallery")}
-                style={{ padding: "13px 10px", border: "1.5px solid var(--border)", borderRadius: 14, background: "var(--card)", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+              <button onClick={() => handleCapture("gallery")} style={{ padding: "13px 10px", border: "1.5px solid var(--border)", borderRadius: 14, background: "var(--card)", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
                 🖼️ Gallery
               </button>
-              <button onClick={() => handleCapture("camera")}
-                style={{ padding: "13px 10px", border: "none", borderRadius: 14, background: "linear-gradient(135deg,#FF6B6B,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, boxShadow: "0 4px 16px rgba(255,107,107,0.4)" }}>
+              <button onClick={() => handleCapture("camera")} style={{ padding: "13px 10px", border: "none", borderRadius: 14, background: "linear-gradient(135deg,#FF6B6B,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, boxShadow: "0 4px 16px rgba(255,107,107,0.4)" }}>
                 📷 Camera
               </button>
             </div>
           )}
-
           {imagePreview && (
             <div style={{ position: "relative", marginBottom: 14, borderRadius: 20, overflow: "hidden" }}>
-              <img src={imagePreview} alt="selfie"
-                style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)",
-                borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16,
-                justifyContent: "space-between",
-              }}>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>
-                  ✅ Photo ready!
-                </div>
-                {/* ✅ MediaPipe result badge on captured photo */}
+              <img src={imagePreview} alt="selfie" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)", borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16, justifyContent: "space-between" }}>
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>✅ Photo ready!</div>
                 {mode === "captured" && liveFaceShape && (
-                  <div style={{
-                    padding: "5px 12px", borderRadius: 20,
-                    background: "rgba(81,207,102,0.9)",
-                    fontFamily: "var(--font-body)", fontSize: 12,
-                    fontWeight: 700, color: "#fff",
-                  }}>
+                  <div style={{ padding: "5px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
                     📐 {liveFaceShape}
                   </div>
                 )}
@@ -591,24 +502,17 @@ export default function FaceAnalysis() {
         <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
-              Accurate results ke liye apna gender select karo:
+              Select your gender for accurate results:
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {["Male", "Female"].map(g => (
                 <div key={g} onClick={() => setSelectedGender(g)}
                   style={{
-                    flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer",
-                    textAlign: "center",
-                    background: selectedGender === g
-                      ? (g === "Female" ? "rgba(255,107,107,0.15)" : "rgba(77,150,255,0.15)")
-                      : "var(--card)",
-                    border: `2px solid ${selectedGender === g
-                      ? (g === "Female" ? "#FF6B6B" : "#4D96FF")
-                      : "var(--border)"}`,
+                    flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer", textAlign: "center",
+                    background: selectedGender === g ? (g === "Female" ? "rgba(255,107,107,0.15)" : "rgba(77,150,255,0.15)") : "var(--card)",
+                    border: `2px solid ${selectedGender === g ? (g === "Female" ? "#FF6B6B" : "#4D96FF") : "var(--border)"}`,
                     fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700,
-                    color: selectedGender === g
-                      ? (g === "Female" ? "#FF6B6B" : "#4D96FF")
-                      : "var(--muted)",
+                    color: selectedGender === g ? (g === "Female" ? "#FF6B6B" : "#4D96FF") : "var(--muted)",
                     transition: "all 0.2s",
                   }}>
                   {g === "Female" ? "👩 Female" : "👨 Male"}
@@ -632,92 +536,50 @@ export default function FaceAnalysis() {
       {result && (
         <div style={{ marginTop: 16 }}>
 
-          {/* ✅ Analysis source badge */}
+          {/* Analysis source badge */}
           <div style={{
             marginBottom: 12, padding: "8px 14px",
-            background: result.analyzedWith?.includes("MediaPipe")
-              ? "rgba(81,207,102,0.1)" : "rgba(77,150,255,0.1)",
-            border: `1px solid ${result.analyzedWith?.includes("MediaPipe")
-              ? "rgba(81,207,102,0.3)" : "rgba(77,150,255,0.3)"}`,
-            borderRadius: 12, fontFamily: "var(--font-body)",
-            fontSize: 12, textAlign: "center", fontWeight: 700,
+            background: result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.1)" : "rgba(77,150,255,0.1)",
+            border: `1px solid ${result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.3)" : "rgba(77,150,255,0.3)"}`,
+            borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 12, textAlign: "center", fontWeight: 700,
             color: result.analyzedWith?.includes("MediaPipe") ? "#51CF66" : "#4D96FF",
           }}>
-            {result.analyzedWith?.includes("MediaPipe")
-              ? "✅ MediaPipe AI — 97% accurate face shape"
-              : "🔍 Face++ AI — 85% accurate face shape"}
+            {result.analyzedWith?.includes("MediaPipe") ? "✅ MediaPipe AI — 97% accurate face shape" : "🔍 Face++ AI — 85% accurate face shape"}
           </div>
 
           {/* Face Profile Card */}
-          <div style={{
-            background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-            borderRadius: 24, padding: 20,
-            border: "1px solid rgba(132,94,247,0.3)",
-            marginBottom: 16, position: "relative", overflow: "hidden"
-          }}>
+          <div style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)", borderRadius: 24, padding: 20, border: "1px solid rgba(132,94,247,0.3)", marginBottom: 16, position: "relative", overflow: "hidden" }}>
             <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, background: "radial-gradient(circle, rgba(132,94,247,0.2), transparent 70%)", pointerEvents: "none" }} />
-
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "#fff", fontWeight: 800, lineHeight: 1 }}>
-                  {result.faceShape} Face
-                </div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
-                  {result.jawlineType} jawline · {result.skinTone} tone
-                </div>
-                <div style={{
-                  marginTop: 8, display: "inline-block", padding: "4px 12px",
-                  borderRadius: 20,
-                  background: isFemale ? "rgba(255,107,107,0.2)" : "rgba(77,150,255,0.2)",
-                  border: `1px solid ${isFemale ? "#FF6B6B" : "#4D96FF"}`,
-                  fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700,
-                  color: isFemale ? "#FF6B6B" : "#4D96FF",
-                }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 22, color: "#fff", fontWeight: 800, lineHeight: 1 }}>{result.faceShape} Face</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>{result.jawlineType} jawline · {result.skinTone} tone</div>
+                <div style={{ marginTop: 8, display: "inline-block", padding: "4px 12px", borderRadius: 20, background: isFemale ? "rgba(255,107,107,0.2)" : "rgba(77,150,255,0.2)", border: `1px solid ${isFemale ? "#FF6B6B" : "#4D96FF"}`, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: isFemale ? "#FF6B6B" : "#4D96FF" }}>
                   {isFemale ? "👩 Female" : "👨 Male"} · Age {result.detectedAge}
                 </div>
               </div>
-              <div style={{
-                background: `${getGradeColor(result.skinGrade)}22`,
-                border: `2px solid ${getGradeColor(result.skinGrade)}`,
-                borderRadius: 14, padding: "8px 14px", textAlign: "center"
-              }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 800, color: getGradeColor(result.skinGrade) }}>
-                  {result.skinGrade}
-                </div>
+              <div style={{ background: `${getGradeColor(result.skinGrade)}22`, border: `2px solid ${getGradeColor(result.skinGrade)}`, borderRadius: 14, padding: "8px 14px", textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 24, fontWeight: 800, color: getGradeColor(result.skinGrade) }}>{result.skinGrade}</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 9, color: "rgba(255,255,255,0.5)" }}>SKIN GRADE</div>
               </div>
             </div>
-
             <div style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Skin Health</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: getSkinScoreColor(result.skinScore) }}>
-                  {result.skinScore}/100
-                </div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: getSkinScoreColor(result.skinScore) }}>{result.skinScore}/100</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                 <div style={{ width: `${result.skinScore}%`, height: "100%", background: getSkinScoreColor(result.skinScore), borderRadius: 6, transition: "width 1s ease" }} />
               </div>
             </div>
-
-            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(255,255,255,0.7)", margin: "10px 0 0", lineHeight: 1.6 }}>
-              {result.faceShapeDetails}
-            </p>
+            <p style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(255,255,255,0.7)", margin: "10px 0 0", lineHeight: 1.6 }}>{result.faceShapeDetails}</p>
           </div>
 
           {/* Tabs */}
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             {RESULT_TABS.map(tab => (
               <div key={tab.id} onClick={() => setActiveTab(tab.id)}
-                style={{
-                  flex: 1, padding: "10px 14px", borderRadius: 14,
-                  cursor: "pointer", textAlign: "center",
-                  background: activeTab === tab.id ? "var(--grad1)" : "var(--card)",
-                  border: `1px solid ${activeTab === tab.id ? "transparent" : "var(--border)"}`,
-                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
-                  color: activeTab === tab.id ? "#fff" : "var(--muted)",
-                  transition: "all 0.2s",
-                }}>
+                style={{ flex: 1, padding: "10px 14px", borderRadius: 14, cursor: "pointer", textAlign: "center", background: activeTab === tab.id ? "var(--grad1)" : "var(--card)", border: `1px solid ${activeTab === tab.id ? "transparent" : "var(--border)"}`, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: activeTab === tab.id ? "#fff" : "var(--muted)", transition: "all 0.2s" }}>
                 {tab.label}
               </div>
             ))}
@@ -726,29 +588,28 @@ export default function FaceAnalysis() {
           {/* HAIR TAB */}
           {activeTab === "hair" && (
             <div>
-              <div style={{
-                background: isFemale
-                  ? "linear-gradient(135deg, rgba(255,107,107,0.1), rgba(132,94,247,0.1))"
-                  : "linear-gradient(135deg, rgba(77,150,255,0.1), rgba(132,94,247,0.1))",
-                border: `1px solid ${isFemale ? "rgba(255,107,107,0.2)" : "rgba(77,150,255,0.2)"}`,
-                borderRadius: 18, padding: 16, marginBottom: 16
-              }}>
+              <div style={{ background: isFemale ? "linear-gradient(135deg, rgba(255,107,107,0.1), rgba(132,94,247,0.1))" : "linear-gradient(135deg, rgba(77,150,255,0.1), rgba(132,94,247,0.1))", border: `1px solid ${isFemale ? "rgba(255,107,107,0.2)" : "rgba(77,150,255,0.2)"}`, borderRadius: 18, padding: 16, marginBottom: 16 }}>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
                   {isFemale ? "👩‍🦱 Female Hairstyles" : "👨‍🦱 Male Hairstyles"} for {result.faceShape} Face
                 </div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)" }}>
-                  {getHairstyles(result.faceShape, isFemale ? "female" : "male").length} personalized cuts — tap any to expand
+                  {getDisplayHairstyles().length} personalized cuts — tap any to expand
+                  {result?.topHairstyles?.length > 0 && (
+                    <span style={{ color: "#51CF66", marginLeft: 6 }}>✅ AI recommended</span>
+                  )}
                 </div>
               </div>
 
-              {getHairstyles(result.faceShape, isFemale ? "female" : "male").map((style, i) => {
+              {/* ✅ getDisplayHairstyles() use karo — Pexels images ke saath */}
+              {getDisplayHairstyles().map((style, i) => {
                 const maintenanceColor = style.maintenance === "Low" ? "#51CF66" : style.maintenance === "Medium" ? "#FFD93D" : "#FF6B6B";
                 const isExpanded = expandedCard === i;
                 return (
                   <div key={i} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, overflow: "hidden", marginBottom: 14 }}>
                     <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
                       <img
-                        src={getHairImage(style.img, isFemale ? "female" : "male")}
+                        // ✅ realImage (Pexels) pehle, fallback Unsplash
+                        src={getHairImage(style.img, isFemale ? "female" : "male", style.realImage)}
                         alt={style.name}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         onError={e => { e.target.src = isFemale ? HAIRSTYLE_IMAGES.default_female : HAIRSTYLE_IMAGES.default_male; }}
@@ -756,6 +617,12 @@ export default function FaceAnalysis() {
                       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%)" }} />
                       <div style={{ position: "absolute", top: 12, left: 12, width: 32, height: 32, borderRadius: 10, background: isFemale ? "linear-gradient(135deg,#FF6B6B,#845EF7)" : "linear-gradient(135deg,#4D96FF,#845EF7)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: "#fff" }}>{i + 1}</div>
                       <div style={{ position: "absolute", top: 12, right: 12, padding: "4px 10px", borderRadius: 20, background: `${maintenanceColor}33`, border: `1px solid ${maintenanceColor}`, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: maintenanceColor }}>{style.maintenance} care</div>
+                      {/* ✅ Pexels badge */}
+                      {style.realImage && (
+                        <div style={{ position: "absolute", top: 44, right: 12, padding: "3px 8px", borderRadius: 20, background: "rgba(81,207,102,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#fff" }}>
+                          📸 Real Photo
+                        </div>
+                      )}
                       <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
                         <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "#fff" }}>{style.name}</div>
                         <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 }}>⏱ {style.time} · Best for {style.bestFor}</div>
