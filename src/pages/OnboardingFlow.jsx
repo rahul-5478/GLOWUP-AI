@@ -37,7 +37,6 @@ export default function OnboardingFlow({ onComplete }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // ✅ refreshUser bhi lo
   const { user, refreshUser } = useAuth();
   const firstName = user?.name?.split(" ")[0] || "there";
   const totalSteps = 7;
@@ -54,33 +53,30 @@ export default function OnboardingFlow({ onComplete }) {
   const handleNext = async () => {
     if (!canNext()) return;
 
-    // Last step — save karo
     if (step === totalSteps - 1) {
       setSaving(true);
       setError("");
       try {
-        // ✅ Profile MongoDB mein save karo
-        await userAPI.updateProfile({
-          profile: {
-            gender,
-            age: parseInt(age),
-            height: parseFloat(height),
-            weight: parseFloat(weight),
-            skinType,
-            goal,
-          }
-        });
+        // ✅ Sirf filled values bhejo
+        const profileData = {};
+        if (gender) profileData.gender = gender;
+        if (age && parseInt(age) > 0) profileData.age = parseInt(age);
+        if (height && parseFloat(height) > 0) profileData.height = parseFloat(height);
+        if (weight && parseFloat(weight) > 0) profileData.weight = parseFloat(weight);
+        if (skinType) profileData.skinType = skinType;
+        if (goal) profileData.goal = goal;
 
-        // ✅ user state refresh karo — profile.gender available ho jaayega
+        await userAPI.updateProfile({ profile: profileData });
+
+        // ✅ User state refresh
         await refreshUser();
 
-        // ✅ localStorage backup
         localStorage.setItem("glowup_onboarded", "true");
         localStorage.setItem("glowup_user_gender", gender);
 
         onComplete();
       } catch (e) {
-        console.error("Profile save error:", e);
+        console.error("Profile save error:", e.response?.data || e.message);
         setError("Profile save nahi hua. Dobara try karo.");
       }
       setSaving(false);
@@ -137,7 +133,7 @@ export default function OnboardingFlow({ onComplete }) {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 0" }}>
 
-        {/* ── STEP 0: Welcome ── */}
+        {/* STEP 0: Welcome */}
         {step === 0 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -185,7 +181,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 1: Gender ── */}
+        {/* STEP 1: Gender */}
         {step === 1 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -195,7 +191,9 @@ export default function OnboardingFlow({ onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 32, margin: "0 auto 16px"
               }}>👤</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Aap kaun hain?</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                Aap kaun hain?
+              </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
                 Hairstyle aur fashion recommendations ke liye zaroori hai
               </div>
@@ -226,7 +224,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 2: Age ── */}
+        {/* STEP 2: Age */}
         {step === 2 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -236,8 +234,12 @@ export default function OnboardingFlow({ onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 32, margin: "0 auto 16px"
               }}>🎂</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Aapki umar kya hai?</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>Age-appropriate recommendations ke liye</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                Aapki umar kya hai?
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+                Age-appropriate recommendations ke liye
+              </div>
             </div>
             <input
               type="number" placeholder="25" value={age}
@@ -262,7 +264,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 3: Height & Weight ── */}
+        {/* STEP 3: Height & Weight */}
         {step === 3 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -272,8 +274,12 @@ export default function OnboardingFlow({ onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 32, margin: "0 auto 16px"
               }}>📏</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Height & Weight</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>BMI aur fitness plan ke liye zaroori</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                Height & Weight
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+                BMI aur fitness plan ke liye zaroori
+              </div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -342,7 +348,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 4: Skin Type ── */}
+        {/* STEP 4: Skin Type */}
         {step === 4 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -352,8 +358,12 @@ export default function OnboardingFlow({ onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 32, margin: "0 auto 16px"
               }}>🧴</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Skin type kya hai?</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>Skincare recommendations personalize hongi</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                Skin type kya hai?
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+                Skincare recommendations personalize hongi
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {SKIN_TYPES.map(s => (
@@ -393,7 +403,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 5: Goal ── */}
+        {/* STEP 5: Goal */}
         {step === 5 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 24 }}>
@@ -403,8 +413,12 @@ export default function OnboardingFlow({ onComplete }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 32, margin: "0 auto 16px"
               }}>🎯</div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>Main goal kya hai?</div>
-              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>Apna GlowUp journey personalize karo</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                Main goal kya hai?
+              </div>
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
+                Apna GlowUp journey personalize karo
+              </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {GOALS.map(g => (
@@ -430,7 +444,7 @@ export default function OnboardingFlow({ onComplete }) {
           </div>
         )}
 
-        {/* ── STEP 6: Ready ── */}
+        {/* STEP 6: Ready */}
         {step === 6 && (
           <div>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -509,7 +523,7 @@ export default function OnboardingFlow({ onComplete }) {
               ))}
             </div>
 
-            {/* ✅ Error message */}
+            {/* Error message */}
             {error && (
               <div style={{
                 marginTop: 12, padding: "10px 14px",
