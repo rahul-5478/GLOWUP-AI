@@ -12,9 +12,12 @@ export function AuthProvider({ children }) {
     const cached = localStorage.getItem("glowup_user");
     if (token && cached) {
       setUser(JSON.parse(cached));
-      // Verify token is still valid
       authAPI.me()
-        .then(res => setUser(res.data.user))
+        .then(res => {
+          setUser(res.data.user);
+          // ✅ Always update localStorage with latest user data
+          localStorage.setItem("glowup_user", JSON.stringify(res.data.user));
+        })
         .catch(() => logout())
         .finally(() => setLoading(false));
     } else {
@@ -40,6 +43,19 @@ export function AuthProvider({ children }) {
     return user;
   };
 
+  // ✅ NEW: Profile save ke baad user state refresh karne ke liye
+  const refreshUser = async () => {
+    try {
+      const res = await authAPI.me();
+      const updatedUser = res.data.user;
+      setUser(updatedUser);
+      localStorage.setItem("glowup_user", JSON.stringify(updatedUser));
+      return updatedUser;
+    } catch (e) {
+      console.error("refreshUser failed:", e);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem("glowup_token");
     localStorage.removeItem("glowup_user");
@@ -47,7 +63,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
