@@ -1,4 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
+const fs = require("fs");
+const path = require("path");
+
+const manifestPath = path.join(__dirname, "android", "app", "src", "main", "AndroidManifest.xml");
+
+const manifest = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
@@ -36,7 +41,7 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities="\${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -46,4 +51,7 @@
 
     </application>
 
-</manifest>
+</manifest>`;
+
+fs.writeFileSync(manifestPath, manifest, "utf8");
+console.log("✅ AndroidManifest.xml fixed!");

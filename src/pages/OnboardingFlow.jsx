@@ -57,7 +57,6 @@ export default function OnboardingFlow({ onComplete }) {
       setSaving(true);
       setError("");
       try {
-        // ✅ Sirf filled values bhejo
         const profileData = {};
         if (gender) profileData.gender = gender;
         if (age && parseInt(age) > 0) profileData.age = parseInt(age);
@@ -67,8 +66,6 @@ export default function OnboardingFlow({ onComplete }) {
         if (goal) profileData.goal = goal;
 
         await userAPI.updateProfile({ profile: profileData });
-
-        // ✅ User state refresh
         await refreshUser();
 
         localStorage.setItem("glowup_onboarded", "true");
@@ -77,7 +74,7 @@ export default function OnboardingFlow({ onComplete }) {
         onComplete();
       } catch (e) {
         console.error("Profile save error:", e.response?.data || e.message);
-        setError("Profile save nahi hua. Dobara try karo.");
+        setError("Could not save profile. Please try again.");
       }
       setSaving(false);
       return;
@@ -155,7 +152,7 @@ export default function OnboardingFlow({ onComplete }) {
                 }}>GlowUp AI</span>
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--muted)", lineHeight: 1.6 }}>
-                Pehle 2 minute mein apna profile setup karo<br />aur 100% personalized results pao!
+                Set up your profile in just 2 minutes<br />and get 100% personalized results!
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -192,10 +189,10 @@ export default function OnboardingFlow({ onComplete }) {
                 fontSize: 32, margin: "0 auto 16px"
               }}>👤</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                Aap kaun hain?
+                Who are you?
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-                Hairstyle aur fashion recommendations ke liye zaroori hai
+                Required for hairstyle & fashion recommendations
               </div>
             </div>
             <div style={{ display: "flex", gap: 12 }}>
@@ -235,10 +232,10 @@ export default function OnboardingFlow({ onComplete }) {
                 fontSize: 32, margin: "0 auto 16px"
               }}>🎂</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                Aapki umar kya hai?
+                How old are you?
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-                Age-appropriate recommendations ke liye
+                For age-appropriate recommendations
               </div>
             </div>
             <input
@@ -278,7 +275,7 @@ export default function OnboardingFlow({ onComplete }) {
                 Height & Weight
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-                BMI aur fitness plan ke liye zaroori
+                Required for BMI and fitness plan
               </div>
             </div>
 
@@ -359,10 +356,10 @@ export default function OnboardingFlow({ onComplete }) {
                 fontSize: 32, margin: "0 auto 16px"
               }}>🧴</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                Skin type kya hai?
+                What's your skin type?
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-                Skincare recommendations personalize hongi
+                We'll personalize your skincare recommendations
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -414,10 +411,10 @@ export default function OnboardingFlow({ onComplete }) {
                 fontSize: 32, margin: "0 auto 16px"
               }}>🎯</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                Main goal kya hai?
+                What's your main goal?
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)" }}>
-                Apna GlowUp journey personalize karo
+                Personalize your GlowUp journey
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -456,21 +453,20 @@ export default function OnboardingFlow({ onComplete }) {
                 boxShadow: "0 16px 48px rgba(81,207,102,0.35)"
               }}>🚀</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                Sab ready hai,{" "}
+                All set,{" "}
                 <span style={{
                   background: "linear-gradient(135deg, #51CF66, #20C997)",
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"
                 }}>{firstName}!</span>
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "var(--muted)" }}>
-                Aapka profile complete ho gaya ✨
+                Your profile is complete ✨
               </div>
             </div>
 
-            {/* Profile Summary */}
             <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, padding: 20, marginBottom: 14 }}>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 14, letterSpacing: 1, textTransform: "uppercase" }}>
-                Aapka Profile
+                Your Profile
               </div>
               {[
                 { icon: gender === "male" ? "👨" : gender === "female" ? "👩" : "🧑", label: "Gender", value: gender?.charAt(0).toUpperCase() + gender?.slice(1), color: "#4D96FF" },
@@ -505,14 +501,14 @@ export default function OnboardingFlow({ onComplete }) {
               border: "1px solid rgba(132,94,247,0.2)", borderRadius: 16, padding: "14px 16px"
             }}>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#845EF7", fontWeight: 700, marginBottom: 8 }}>
-                ✨ Ab yeh sab milega
+                ✨ Here's what you'll get
               </div>
               {[
-                "Face shape + gender-accurate hairstyles",
+                "Face shape & gender-accurate hairstyle suggestions",
                 "Age-appropriate skincare routine",
                 "BMI-based fitness & diet plan",
                 "Personalized fashion recommendations",
-                "Skin type specific products",
+                "Skin type specific product suggestions",
               ].map((item, i) => (
                 <div key={i} style={{
                   fontFamily: "var(--font-body)", fontSize: 12,
@@ -523,7 +519,6 @@ export default function OnboardingFlow({ onComplete }) {
               ))}
             </div>
 
-            {/* Error message */}
             {error && (
               <div style={{
                 marginTop: 12, padding: "10px 14px",
@@ -572,8 +567,8 @@ export default function OnboardingFlow({ onComplete }) {
               }} />
               Saving...
             </>
-          ) : step === 0 ? "Shuru Karo →"
-            : step === totalSteps - 1 ? "🚀 GlowUp Start Karo!"
+          ) : step === 0 ? "Get Started →"
+            : step === totalSteps - 1 ? "🚀 Start My GlowUp!"
             : "Next →"}
         </button>
 
@@ -586,7 +581,7 @@ export default function OnboardingFlow({ onComplete }) {
               background: "transparent", fontFamily: "var(--font-body)",
               fontSize: 13, color: "var(--muted)", cursor: "pointer"
             }}>
-            ← Wapas Jao
+            ← Go Back
           </button>
         )}
       </div>

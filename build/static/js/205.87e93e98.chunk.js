@@ -1,0 +1,2 @@
+"use strict";(globalThis.webpackChunkglowup_ai_frontend=globalThis.webpackChunkglowup_ai_frontend||[]).push([[205],{205(e,n,p){p.d(n,{App:()=>b});const b=(0,p(403).F3)("App",{web:()=>p.e(551).then(p.bind(p,551)).then(e=>new e.AppWeb)})}}]);
+//# sourceMappingURL=205.87e93e98.chunk.js.map

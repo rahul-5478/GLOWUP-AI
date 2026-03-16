@@ -9,6 +9,9 @@
     "@capacitor/cli": "^8.2.0",
     "@capacitor/core": "^8.2.0",
     "@capacitor/filesystem": "^8.1.2",
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/face_mesh": "^0.4.1633559619",
     "axios": "^1.6.2",
     "firebase": "^12.10.0",
     "react": "^18.2.0",
@@ -17,11 +20,12 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "node node_modules/react-scripts/bin/react-scripts.js build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
+  "start": "react-scripts start",
+  "build": "react-scripts build",
+  "test": "react-scripts test",
+  "eject": "react-scripts eject",
+  "build:android": "react-scripts build && npx cap copy android && node fix-manifest.js"
+},
   "browserslist": {
     "production": [
       ">0.2%",
