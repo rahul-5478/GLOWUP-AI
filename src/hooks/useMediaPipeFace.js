@@ -6,11 +6,10 @@ export const calculateFaceShapeFromLandmarks = (landmarks) => {
 
   const p = (i) => landmarks[i];
 
-  // Key points
-  const faceWidth = Math.abs(p(454).x - p(234).x);       // cheek to cheek
-  const faceHeight = Math.abs(p(152).y - p(10).y);        // chin to forehead
-  const foreheadWidth = Math.abs(p(389).x - p(162).x);    // temple to temple
-  const jawWidth = Math.abs(p(397).x - p(172).x);         // jaw corners
+  const faceWidth = Math.abs(p(454).x - p(234).x);
+  const faceHeight = Math.abs(p(152).y - p(10).y);
+  const foreheadWidth = Math.abs(p(389).x - p(162).x);
+  const jawWidth = Math.abs(p(397).x - p(172).x);
 
   const widthToHeight = faceWidth / faceHeight;
   const foreheadToFace = foreheadWidth / faceWidth;
@@ -40,6 +39,33 @@ export const calculateJawlineType = (landmarks) => {
   if (ratio > 0.80) return "strong";
   if (ratio > 0.65) return "defined";
   return "soft";
+};
+
+// ─── Request Camera Permission ────────────────────────────────────────────────
+const requestCameraPermission = async () => {
+  // ✅ Method 1: Capacitor Camera plugin
+  try {
+    const { Camera } = await import("@capacitor/camera");
+    const status = await Camera.requestPermissions({ permissions: ["camera"] });
+    console.log("📷 Capacitor camera permission:", status);
+    if (status.camera === "granted") return true;
+    if (status.camera === "denied") return false;
+  } catch (e) {
+    console.log("Capacitor Camera not available, trying web API...");
+  }
+
+  // ✅ Method 2: Web getUserMedia
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: false,
+    });
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (e) {
+    console.error("getUserMedia permission denied:", e);
+    return false;
+  }
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -91,7 +117,29 @@ export function useMediaPipeFace() {
   const startCamera = useCallback(async () => {
     setIsLoading(true);
     setError("");
+
     try {
+      // ✅ Step 1: Permission maango
+      console.log("📷 Requesting camera permission...");
+      const hasPermission = await requestCameraPermission();
+
+      if (!hasPermission) {
+        setError("Camera permission denied.\nSettings → Apps → GlowUp AI → Permissions → Camera → Allow karo");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("✅ Camera permission granted");
+
+      // ✅ Step 2: Video element ready hone ka wait karo
+      if (!videoRef.current) {
+        setError("Video element ready nahi hai. Dobara try karo.");
+        setIsLoading(false);
+        return;
+      }
+
+      // ✅ Step 3: MediaPipe load karo
+      console.log("🔍 Loading MediaPipe FaceMesh...");
       const { FaceMesh } = await import("@mediapipe/face_mesh");
       const { Camera } = await import("@mediapipe/camera_utils");
 
@@ -133,7 +181,8 @@ export function useMediaPipeFace() {
 
       faceMeshRef.current = faceMesh;
 
-      const camera = new Camera(videoRef.current, {
+      // ✅ Step 4: Camera start karo
+      const mpCamera = new Camera(videoRef.current, {
         onFrame: async () => {
           if (faceMeshRef.current && videoRef.current) {
             await faceMeshRef.current.send({ image: videoRef.current });
@@ -143,28 +192,46 @@ export function useMediaPipeFace() {
         height: 480,
       });
 
-      await camera.start();
-      cameraRef.current = camera;
+      await mpCamera.start();
+      cameraRef.current = mpCamera;
       setIsReady(true);
       setIsLoading(false);
+      console.log("✅ Camera started successfully");
+
     } catch (err) {
-      console.error("MediaPipe error:", err);
-      setError("Camera start nahi hua. Permission check karo.");
+      console.error("Camera/MediaPipe error:", err);
+
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setError("Camera permission denied.\nSettings → Apps → GlowUp AI → Permissions → Camera → Allow karo");
+      } else if (err.name === "NotFoundError") {
+        setError("Camera nahi mila. Device mein camera check karo.");
+      } else if (err.name === "NotReadableError") {
+        setError("Camera already kisi aur app mein use ho raha hai. Dusri apps band karo.");
+      } else {
+        setError("Camera start nahi hua. Upload Photo use karo.");
+      }
       setIsLoading(false);
     }
   }, [drawMesh]);
 
   const stopCamera = useCallback(() => {
-    if (cameraRef.current) { cameraRef.current.stop(); cameraRef.current = null; }
-    if (faceMeshRef.current) { faceMeshRef.current.close(); faceMeshRef.current = null; }
+    if (cameraRef.current) {
+      try { cameraRef.current.stop(); } catch (e) {}
+      cameraRef.current = null;
+    }
+    if (faceMeshRef.current) {
+      try { faceMeshRef.current.close(); } catch (e) {}
+      faceMeshRef.current = null;
+    }
     setIsReady(false);
     setFaceDetected(false);
     setLiveFaceShape(null);
+    latestLandmarks.current = null;
   }, []);
 
   const captureFrame = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return null;
+    if (!video || !video.videoWidth) return null;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
