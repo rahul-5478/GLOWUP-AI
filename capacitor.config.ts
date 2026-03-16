@@ -17,6 +17,10 @@ const config: CapacitorConfig = {
       style: "Dark",
       backgroundColor: "#0A0A0F",
     },
+    // ✅ Camera permission add karo
+    Camera: {
+      presentationStyle: "fullscreen",
+    },
   },
 };
 
