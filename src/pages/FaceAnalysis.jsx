@@ -398,34 +398,48 @@ export default function FaceAnalysis() {
         mpAnalysis = { faceShape: selectedFaceShape, jawlineType: "Defined" };
       }
 
-      // Sirf MediaPipe data se result banao — koi API call nahi
-      const data = {
-        faceShape: mpAnalysis.faceShape.charAt(0).toUpperCase() + mpAnalysis.faceShape.slice(1),
-        jawlineType: mpAnalysis.jawlineType || "Defined",
-        skinTone: "Natural",
-        skinScore: 75,
-        skinGrade: "B",
-        detectedAge: "—",
-        detectedGender: selectedGender,
-        faceShapeDetails: getFaceShapeDetails(mpAnalysis.faceShape),
-        analyzedWith: "MediaPipe AI",
-        colorRecommendations: getColorRecs(mpAnalysis.faceShape, selectedGender),
-        grooming: getGroomingTips(selectedGender),
-        stylesAvoid: getStylesAvoid(mpAnalysis.faceShape, selectedGender),
-        nextScanIn: "30 days",
-      };
+      // Step 3: Backend ko MediaPipe data + image bhejo → Gemini AI analyze karega
+      const token = localStorage.getItem("glowup_token");
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const res = await fetch(`${apiUrl}/api/face/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          imageBase64,
+          mediapipe: {
+            faceShape: mpAnalysis.faceShape,
+            jawlineType: mpAnalysis.jawlineType,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Analysis failed");
+      }
+
+      const json = await res.json();
+      const data = json.result;
+      data.detectedGender = selectedGender;
 
       setResult(data);
 
-      // Pexels se images load karo
-      const styles = getHairstyles(data.faceShape, selectedGender);
-      loadPexelsImages(styles);
+      // Step 4: Pexels hairstyle images load karo
+      if (data.topHairstyles?.length > 0) {
+        loadPexelsImages(data.topHairstyles);
+      } else {
+        const styles = getHairstyles(data.faceShape, selectedGender === "Female" ? "female" : "male");
+        loadPexelsImages(styles);
+      }
 
       const prev = parseInt(localStorage.getItem("glowup_face_count") || "0");
       localStorage.setItem("glowup_face_count", prev + 1);
 
     } catch (err) {
-      setError("Analysis failed. Please try again with a clear selfie.");
+      setError(err.message || "Analysis failed. Please try again.");
       console.error(err);
     }
 
@@ -674,12 +688,14 @@ export default function FaceAnalysis() {
           {/* Analysis source badge */}
           <div style={{
             marginBottom: 12, padding: "8px 14px",
-            background: "rgba(81,207,102,0.1)",
-            border: "1px solid rgba(81,207,102,0.3)",
+            background: result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.1)" : "rgba(77,150,255,0.1)",
+            border: `1px solid ${result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.3)" : "rgba(77,150,255,0.3)"}`,
             borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 12, textAlign: "center", fontWeight: 700,
-            color: "#51CF66",
+            color: result.analyzedWith?.includes("MediaPipe") ? "#51CF66" : "#4D96FF",
           }}>
-            ✅ MediaPipe AI — 97% accurate face shape detection
+            {result.analyzedWith?.includes("MediaPipe")
+              ? "✅ MediaPipe + Gemini AI — 97% accurate face shape & haircut analysis"
+              : "🔍 Face++ + Gemini AI — face shape & haircut analysis"}
           </div>
 
           {/* Face Profile Card */}
