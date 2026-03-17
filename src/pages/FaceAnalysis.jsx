@@ -256,7 +256,9 @@ export default function FaceAnalysis() {
   const [expandedCard, setExpandedCard] = useState(null);
   const [selectedGender, setSelectedGender] = useState(null);
   const [mode, setMode] = useState("upload");
-  const [hairstyleImages, setHairstyleImages] = useState({}); // Pexels fetched images
+  const [hairstyleImages, setHairstyleImages] = useState({});
+  const [showFaceShapePicker, setShowFaceShapePicker] = useState(false);
+  const [selectedFaceShape, setSelectedFaceShape] = useState(null);
 
   // ─── Real-time browser camera refs ──────────────────────────────────────────
   const browserVideoRef = useRef(null);
@@ -384,12 +386,16 @@ export default function FaceAnalysis() {
 
     try {
       // MediaPipe se face analysis lo
-      const mpAnalysis = getFaceAnalysis();
+      let mpAnalysis = getFaceAnalysis();
 
       if (!mpAnalysis || !mpAnalysis.faceShape) {
-        setError("Face detect nahi hua. Please live camera use karo ya clear selfie lo.");
-        setLoading(false);
-        return;
+        if (!selectedFaceShape) {
+          setLoading(false);
+          setShowFaceShapePicker(true);
+          setError("Face not detected automatically. Please select your face shape below.");
+          return;
+        }
+        mpAnalysis = { faceShape: selectedFaceShape, jawlineType: "Defined" };
       }
 
       // Sirf MediaPipe data se result banao — koi API call nahi
@@ -600,6 +606,33 @@ export default function FaceAnalysis() {
       )}
 
       <ErrorMessage message={error} />
+
+      {/* Manual Face Shape Picker — shown when MediaPipe fails */}
+      {showFaceShapePicker && imagePreview && (
+        <div style={{ background: "var(--card)", border: "1px solid rgba(77,150,255,0.3)", borderRadius: 18, padding: 16, marginBottom: 14 }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+            📐 Select Your Face Shape
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
+            MediaPipe could not detect automatically — please select manually
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {["Oval", "Round", "Square", "Heart", "Oblong", "Diamond"].map(shape => (
+              <div key={shape} onClick={() => { setSelectedFaceShape(shape.toLowerCase()); setShowFaceShapePicker(false); setError(""); }}
+                style={{
+                  padding: "9px 16px", borderRadius: 20, cursor: "pointer",
+                  background: selectedFaceShape === shape.toLowerCase() ? "rgba(77,150,255,0.15)" : "var(--surface)",
+                  border: `1.5px solid ${selectedFaceShape === shape.toLowerCase() ? "#4D96FF" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
+                  color: selectedFaceShape === shape.toLowerCase() ? "#4D96FF" : "var(--muted)",
+                  transition: "all 0.2s",
+                }}>
+                {shape}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Gender + Analyze */}
       {imagePreview && !loading && (
