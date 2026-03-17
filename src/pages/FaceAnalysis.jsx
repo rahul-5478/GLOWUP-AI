@@ -365,12 +365,16 @@ export default function FaceAnalysis() {
         setMode("captured");
       }
     } else {
-      // Browser: save face shape first, then capture
+      // Browser: save face shape from live state BEFORE capture
       const mpData = getFaceAnalysis();
       if (mpData?.faceShape) {
         setCapturedFaceShape(mpData.faceShape);
         setCapturedJawline(mpData.jawlineType);
-        console.log("✅ Face shape saved:", mpData.faceShape);
+        console.log("✅ Face shape from getFaceAnalysis:", mpData.faceShape);
+      } else if (liveFaceShape) {
+        setCapturedFaceShape(liveFaceShape);
+        setCapturedJawline(liveJawline);
+        console.log("✅ Face shape from live state:", liveFaceShape);
       }
       captureBrowserFrame();
       stopCamera();
@@ -602,10 +606,18 @@ export default function FaceAnalysis() {
               </div>
             )}
 
-            {/* Browser cam: simple instruction */}
+            {/* Browser cam: show live face shape */}
             {browserCamActive && !isNative && (
-              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "8px 14px", borderRadius: 12, background: "rgba(0,0,0,0.7)", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
-                😊 Apna chehra frame mein rakho aur capture karo
+              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12 }}>
+                {liveFaceShape ? (
+                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#fff", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    ✅ {liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1)} Face Detected — Ready to capture!
+                  </div>
+                ) : (
+                  <div style={{ padding: "8px 14px", borderRadius: 12, background: "rgba(0,0,0,0.7)", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
+                    😊 Keep your face in the frame — detecting shape...
+                  </div>
+                )}
               </div>
             )}
           </div>
