@@ -266,9 +266,9 @@ export default function FashionAdvisor() {
 
   // ─── Analyze ──────────────────────────────────────────────────────────────
   const analyze = async () => {
-    if (!gender) return setError("Pehle Male ya Female select karo!");
-    if (!occasion) return setError("Occasion select karo!");
-    if (!imageBase64) return setError("Pehle photo lo ya upload karo!");
+    if (!gender) return setError("Please select Male or Female first!");
+    if (!occasion) return setError("Please select an occasion!");
+    if (!imageBase64) return setError("Please take or upload a photo first!");
 
     setAnalyzing(true);
     setError("");
@@ -320,14 +320,14 @@ export default function FashionAdvisor() {
           </span>
         </div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-          AI analyzes your photo → skin tone → best outfit for you
+          AI analyzes your photo → detects skin tone → suggests best outfit
         </div>
       </div>
 
       {/* ─── Step 1: Gender Select ─────────────────────────────────────────── */}
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 18, border: "1px solid var(--border)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>
-          Step 1 — Aap kaun hain?
+          Step 1 — Who are you?
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           {[
@@ -353,10 +353,10 @@ export default function FashionAdvisor() {
       {/* ─── Step 2: Photo ────────────────────────────────────────────────── */}
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 18, border: "1px solid var(--border)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>
-          Step 2 — Full body photo lo
+          Step 2 — Take a full body photo
         </div>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)", marginBottom: 14, padding: "8px 12px", background: "rgba(132,94,247,0.06)", borderRadius: 10, border: "1px solid rgba(132,94,247,0.15)" }}>
-          💡 AI tumhari skin tone detect karega aur best outfit suggest karega
+          💡 AI will detect your skin tone and suggest the best outfit for you
         </div>
 
         {/* Camera Mode */}
@@ -368,12 +368,12 @@ export default function FashionAdvisor() {
               {!camActive && !camError && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, background: "rgba(0,0,0,0.8)" }}>
                   <div style={{ fontSize: 28 }}>📷</div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#fff" }}>Camera shuru ho rahi hai...</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#fff" }}>Starting camera...</div>
                 </div>
               )}
               {camActive && (
                 <div style={{ position: "absolute", bottom: 10, left: 10, right: 10, padding: "8px 12px", background: "rgba(0,0,0,0.7)", borderRadius: 10, fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
-                  📏 Full body frame mein rakho — sir se paon tak
+                  📏 Keep full body in frame — head to toe
                 </div>
               )}
             </div>
@@ -401,7 +401,7 @@ export default function FashionAdvisor() {
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#fff" }}>✅ Photo ready!</div>
               <button onClick={() => { setImageBase64(null); setImagePreview(null); setSkinTone(null); setResult(null); }}
                 style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.4)", background: "rgba(0,0,0,0.4)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 12, cursor: "pointer" }}>
-                ✕ Hata do
+                ✕ Remove
               </button>
             </div>
           </div>
@@ -425,7 +425,7 @@ export default function FashionAdvisor() {
       {/* ─── Step 3: Occasion ─────────────────────────────────────────────── */}
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 18, border: "1px solid var(--border)", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>
-          Step 3 — Occasion select karo
+          Step 3 — Select an occasion
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {OCCASIONS.map((o) => (
@@ -466,7 +466,7 @@ export default function FashionAdvisor() {
         {analyzing ? (
           <>
             <div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "spin 0.75s linear infinite" }} />
-            Skin tone detect ho rahi hai...
+            Detecting skin tone...
           </>
         ) : "✨ Analyze & Get Outfits"}
       </button>
@@ -498,7 +498,7 @@ export default function FashionAdvisor() {
               {result.gender === "male" ? "👨 Male Outfits" : "👩 Female Outfits"} for {result.occasion}
             </div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)" }}>
-              {result.outfits.length} outfits — {skinInfo?.label} skin tone ke liye
+              {result.outfits.length} outfits — {skinInfo?.label} skin tone for
               <span style={{ color: "#51CF66", marginLeft: 6 }}>✅ Pexels real photos</span>
             </div>
           </div>
@@ -579,26 +579,26 @@ export default function FashionAdvisor() {
           {/* Skin Tone Tips */}
           <div style={{ background: `${skinInfo?.color}15`, border: `1px solid ${skinInfo?.color}40`, borderRadius: 18, padding: 16 }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
-              {skinInfo?.emoji} {skinInfo?.label} skin ke liye color tips
+              {skinInfo?.emoji} {skinInfo?.label} skin for color tips
             </div>
             {(skinTone === "fair" ? [
-              "Pastels aur soft tones tumhare liye best hain",
-              "Navy, deep blue, forest green bahut suit karta hai",
-              "Avoid very pale yellow ya neon — washed out lagta hai",
-              "Jewel tones — emerald, sapphire — stunning lagte hain",
-              "Black aur white dono great options hain",
+              "Pastels aur soft tones tumhare liye are best",
+              "Navy, deep blue, forest green suits very well",
+              "Avoid very pale yellow ya neon — looks washed out",
+              "Jewel tones — emerald, sapphire — look stunning",
+              "Black aur white dono are great options",
             ] : skinTone === "medium" ? [
-              "Warm earth tones — rust, mustard, olive — best hain",
-              "Rich jewel tones — burgundy, teal, royal blue suit karte hain",
-              "Avoid very pale pastels — woh blend ho jaate hain",
-              "Orange aur terracotta shades gorgeous lagte hain",
-              "Bold prints aur patterns tumhare skin pe pop karte hain",
+              "Warm earth tones — rust, mustard, olive — are best",
+              "Rich jewel tones — burgundy, teal, royal blue suit well",
+              "Avoid very pale pastels — woh blend in",
+              "Orange aur terracotta shades look gorgeous",
+              "Bold prints aur patterns tumhare skin pe pop beautifully",
             ] : [
-              "Bold bright colors — neon, electric blue, hot pink — stunning hain",
-              "White aur ivory bahut attractive contrast dete hain",
+              "Bold bright colors — neon, electric blue, hot pink — look stunning",
+              "White aur ivory create stunning contrast",
               "Avoid very dark colors without contrast",
-              "Gold aur silver jewelry beautiful lagti hai",
-              "Rich jewel tones — emerald, purple — regal lagte hain",
+              "Gold aur silver jewelry looks beautiful",
+              "Rich jewel tones — emerald, purple — look regal",
             ]).map((tip, i) => (
               <div key={i} style={{ display: "flex", gap: 8, padding: "5px 0" }}>
                 <span style={{ color: "#845EF7", flexShrink: 0 }}>✓</span>
@@ -610,7 +610,7 @@ export default function FashionAdvisor() {
           {/* Reset */}
           <button onClick={reset}
             style={{ width: "100%", padding: "13px", border: "1px solid var(--border)", borderRadius: 14, background: "transparent", color: "var(--muted)", fontFamily: "var(--font-body)", fontSize: 13, cursor: "pointer" }}>
-            🔄 Dobara Try Karo
+            🔄 Try Again
           </button>
         </div>
       )}
