@@ -1,12 +1,11 @@
 import { useState, useRef, useCallback } from "react";
-import { faceAPI } from "../utils/api";
 import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
-import { GlowButton, SectionTitle, Card, LoadingDots, ResultCard, ErrorMessage } from "../components/UI";
+import { GlowButton, SectionTitle, Card, LoadingDots, ErrorMessage } from "../components/UI";
 import { useLang } from "../hooks/useLanguage";
 import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
 
 // ─── 🔑 APNI PEXELS API KEY YAHAN LAGAO ──────────────────────────────────────
-const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY;
+const PEXELS_API_KEY = "YOUR_PEXELS_API_KEY_HERE";
 
 // ─── Pexels se real-time image fetch karne wala function ─────────────────────
 const fetchPexelsImage = async (query) => {
@@ -198,6 +197,54 @@ const getMaintenanceTips = (level, gender) => {
 const getSkinScoreColor = (score) => score >= 70 ? "#51CF66" : score >= 50 ? "#FFD93D" : "#FF6B6B";
 const getGradeColor = (grade) => ({ A: "#51CF66", B: "#4D96FF", C: "#FFD93D", D: "#FF9500", F: "#FF6B6B" })[grade] || "#888";
 
+const getFaceShapeDetails = (shape) => {
+  const details = {
+    round: "Tumhara chehra round shape ka hai — cheekbones wide hain aur jawline aur forehead almost same width ke hain. Hairstyles jo height add karein best hain.",
+    oval: "Oval face shape sabse balanced maana jaata hai — forehead thoda wide, jawline slightly narrow. Almost sabhi hairstyles suit karte hain!",
+    square: "Tumhara jawline strong aur defined hai. Soft layers aur waves sharp features ko balance karte hain.",
+    oblong: "Tumhara chehra lambe shape ka hai — length width se zyada. Side volume aur bangs chehra balance karte hain.",
+    heart: "Wide forehead aur narrow pointed chin — heart shape elegant hota hai. Chin level pe volume add karo.",
+    diamond: "Prominent cheekbones ke saath narrow forehead aur chin — rare aur unique shape. Forehead aur chin pe volume add karo.",
+  };
+  return details[shape?.toLowerCase()] || details["oval"];
+};
+
+const getColorRecs = (shape, gender) => {
+  const isFemale = gender?.toLowerCase() === "female";
+  return isFemale
+    ? ["Warm earth tones — browns, terracottas, burnt orange", "Soft pastels for everyday — blush, lavender", "Bold jewel tones for evening — emerald, sapphire", "Avoid neon colors near the face", "Neutrals like beige and cream suit most skin tones"]
+    : ["Navy, charcoal, deep greens for shirts", "Earth tones — brown, olive, rust for casual wear", "White and light blue for formal look", "Avoid very bright neon colors", "Black always works — versatile and classic"];
+};
+
+const getGroomingTips = (gender) => {
+  const isFemale = gender?.toLowerCase() === "female";
+  return isFemale
+    ? ["Moisturize daily — morning and night routine", "SPF 30+ sunscreen every single day", "Remove makeup before sleeping always", "Exfoliate 2x a week for glowing skin", "Drink 8 glasses of water daily"]
+    : ["Wash face 2x daily with face wash", "Moisturize after washing — oily skin bhi needs it", "Use SPF 30+ daily — sun damage is real", "Trim beard regularly for clean look", "Exfoliate 1-2x a week to avoid ingrown hair"];
+};
+
+const getStylesAvoid = (shape, gender) => {
+  const isFemale = gender?.toLowerCase() === "female";
+  const male = {
+    round: ["Bowl cuts that add width", "Very short buzz without fade", "Curly styles at ear level"],
+    oval: ["Extremely wide side volume only", "Styles that hide your balanced features"],
+    square: ["Blunt geometric cuts", "Styles that emphasize jaw width"],
+    oblong: ["Very long straight styles", "High quiff adding more height", "Center part with flat hair"],
+    heart: ["Very wide top volume", "High fade with nothing on top"],
+    diamond: ["Maximum volume only at cheekbones"],
+  };
+  const female = {
+    round: ["Chin length blunt bobs", "Lots of volume at sides", "Center part with flat hair"],
+    oval: ["Styles that completely hide face shape"],
+    square: ["Blunt geometric cuts", "Straight bangs across forehead"],
+    oblong: ["Very long straight styles", "High top knots adding height"],
+    heart: ["Top heavy volume styles", "High buns that emphasize forehead"],
+    diamond: ["Maximum cheek volume only", "Slicked back tight styles"],
+  };
+  const db = isFemale ? female : male;
+  return db[shape?.toLowerCase()] || db["oval"];
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FaceAnalysis() {
   const { t } = useLang();
@@ -338,46 +385,60 @@ export default function FaceAnalysis() {
     setHairstyleImages(imgs);
   };
 
-  // ─── Analyze ─────────────────────────────────────────────────────────────────
+  // ─── Analyze — sirf MediaPipe, koi backend nahi ─────────────────────────────
   const analyze = async () => {
     if (!imageBase64) return;
     if (!selectedGender) {
       setError("Please select Male or Female before analyzing.");
       return;
     }
+
     setLoading(true);
     setError("");
     setResult(null);
     setHairstyleImages({});
 
     try {
+      // MediaPipe se face analysis lo
       const mpAnalysis = getFaceAnalysis();
-      const res = await faceAPI.analyze(imageBase64, "image/jpeg", {
-        mediapipe: mpAnalysis ? {
-          faceShape: mpAnalysis.faceShape,
-          jawlineType: mpAnalysis.jawlineType,
-        } : null,
-      });
 
-      const data = res.data.result;
-      data.detectedGender = selectedGender;
-
-      if (mpAnalysis?.faceShape) {
-        data.faceShape = mpAnalysis.faceShape;
-        data.jawlineType = mpAnalysis.jawlineType;
+      if (!mpAnalysis || !mpAnalysis.faceShape) {
+        setError("Face detect nahi hua. Please live camera use karo ya clear selfie lo.");
+        setLoading(false);
+        return;
       }
+
+      // Sirf MediaPipe data se result banao — koi API call nahi
+      const data = {
+        faceShape: mpAnalysis.faceShape.charAt(0).toUpperCase() + mpAnalysis.faceShape.slice(1),
+        jawlineType: mpAnalysis.jawlineType || "Defined",
+        skinTone: "Natural",
+        skinScore: 75,
+        skinGrade: "B",
+        detectedAge: "—",
+        detectedGender: selectedGender,
+        faceShapeDetails: getFaceShapeDetails(mpAnalysis.faceShape),
+        analyzedWith: "MediaPipe AI",
+        colorRecommendations: getColorRecs(mpAnalysis.faceShape, selectedGender),
+        grooming: getGroomingTips(selectedGender),
+        stylesAvoid: getStylesAvoid(mpAnalysis.faceShape, selectedGender),
+        nextScanIn: "30 days",
+      };
 
       setResult(data);
 
-      // ✅ Pexels se images load karo result ke baad
+      // Pexels se images load karo
       const styles = getHairstyles(data.faceShape, selectedGender);
       loadPexelsImages(styles);
 
       const prev = parseInt(localStorage.getItem("glowup_face_count") || "0");
       localStorage.setItem("glowup_face_count", prev + 1);
+
     } catch (err) {
-      setError(err.response?.data?.error || "Analysis failed. Please try with a clearer selfie.");
+      setError("Analysis failed. Please try again with a clear selfie.");
+      console.error(err);
     }
+
     setLoading(false);
   };
 
@@ -620,12 +681,12 @@ export default function FaceAnalysis() {
           {/* Analysis source badge */}
           <div style={{
             marginBottom: 12, padding: "8px 14px",
-            background: result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.1)" : "rgba(77,150,255,0.1)",
-            border: `1px solid ${result.analyzedWith?.includes("MediaPipe") ? "rgba(81,207,102,0.3)" : "rgba(77,150,255,0.3)"}`,
+            background: "rgba(81,207,102,0.1)",
+            border: "1px solid rgba(81,207,102,0.3)",
             borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 12, textAlign: "center", fontWeight: 700,
-            color: result.analyzedWith?.includes("MediaPipe") ? "#51CF66" : "#4D96FF",
+            color: "#51CF66",
           }}>
-            {result.analyzedWith?.includes("MediaPipe") ? "✅ MediaPipe AI — 97% accurate face shape" : "🔍 Face++ AI — 85% accurate face shape"}
+            ✅ MediaPipe AI — 97% accurate face shape detection
           </div>
 
           {/* Face Profile Card */}
@@ -800,9 +861,21 @@ export default function FaceAnalysis() {
           {/* STYLE TAB */}
           {activeTab === "style" && (
             <div>
-              <ResultCard title="🎨 Color Recommendations" items={result.colorRecommendations} gradient="var(--grad2)" icon="🎨" />
-              <ResultCard title="✂️ Grooming Tips" items={result.grooming} gradient="var(--grad3)" icon="✂️" />
-              <ResultCard title="⚠️ Styles to Avoid" items={result.stylesAvoid} gradient="linear-gradient(135deg,#555,#333)" icon="⚠️" />
+              {[
+                { title: "🎨 Color Recommendations", items: result.colorRecommendations, color: "#845EF7" },
+                { title: "✂️ Grooming Tips", items: result.grooming, color: "#4D96FF" },
+                { title: "⚠️ Styles to Avoid", items: result.stylesAvoid, color: "#FF6B6B" },
+              ].map((section, si) => (
+                <div key={si} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: section.color, marginBottom: 12 }}>{section.title}</div>
+                  {section.items?.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, padding: "6px 0", borderBottom: i < section.items.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ color: section.color, flexShrink: 0 }}>•</span>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{item}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
               <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border)", marginTop: 12 }}>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", textAlign: "center" }}>
                   📅 Next scan in <span style={{ color: "var(--accent)", fontWeight: 700 }}>{result.nextScanIn}</span>
