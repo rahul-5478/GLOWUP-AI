@@ -259,6 +259,8 @@ export default function FaceAnalysis() {
   const [hairstyleImages, setHairstyleImages] = useState({});
   const [showFaceShapePicker, setShowFaceShapePicker] = useState(false);
   const [selectedFaceShape, setSelectedFaceShape] = useState(null);
+  const [capturedFaceShape, setCapturedFaceShape] = useState(null);
+  const [capturedJawline, setCapturedJawline] = useState(null);
 
   // ─── Real-time browser camera refs ──────────────────────────────────────────
   const browserVideoRef = useRef(null);
@@ -329,6 +331,10 @@ export default function FaceAnalysis() {
     setImageBase64(null);
     setError("");
     setBrowserCamError("");
+    setCapturedFaceShape(null);
+    setCapturedJawline(null);
+    setSelectedFaceShape(null);
+    setShowFaceShapePicker(false);
 
     if (isNative) {
       // Mobile: use MediaPipe + Capacitor camera
@@ -344,7 +350,13 @@ export default function FaceAnalysis() {
   // ─── Capture from live camera ────────────────────────────────────────────────
   const handleCaptureLive = () => {
     if (isNative) {
-      // Native: MediaPipe captureFrame
+      // Save face shape BEFORE stopping camera
+      const mpData = getFaceAnalysis();
+      if (mpData?.faceShape) {
+        setCapturedFaceShape(mpData.faceShape);
+        setCapturedJawline(mpData.jawlineType);
+        console.log("✅ Face shape saved:", mpData.faceShape);
+      }
       const frame = captureFrame();
       if (frame) {
         setImageBase64(frame.base64);
@@ -353,7 +365,13 @@ export default function FaceAnalysis() {
         setMode("captured");
       }
     } else {
-      // Browser: capture from getUserMedia video
+      // Browser: save face shape first, then capture
+      const mpData = getFaceAnalysis();
+      if (mpData?.faceShape) {
+        setCapturedFaceShape(mpData.faceShape);
+        setCapturedJawline(mpData.jawlineType);
+        console.log("✅ Face shape saved:", mpData.faceShape);
+      }
       captureBrowserFrame();
       stopCamera();
     }
@@ -610,11 +628,26 @@ export default function FaceAnalysis() {
           <img src={imagePreview} alt="selfie" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)", borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16, justifyContent: "space-between" }}>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>✅ Photo ready!</div>
-            {liveFaceShape && (
+            {(capturedFaceShape || liveFaceShape) && (
               <div style={{ padding: "5px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-                📐 {liveFaceShape}
+                📐 {capturedFaceShape || liveFaceShape} Face Detected
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Face shape detected info box */}
+      {capturedFaceShape && mode === "captured" && (
+        <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(81,207,102,0.08)", border: "1px solid rgba(81,207,102,0.25)", borderRadius: 14, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20 }}>📐</span>
+          <div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#51CF66" }}>
+              {capturedFaceShape.charAt(0).toUpperCase() + capturedFaceShape.slice(1)} Face Shape Detected
+            </div>
+            <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>
+              MediaPipe AI · {capturedJawline} jawline · Sending to Gemini AI...
+            </div>
           </div>
         </div>
       )}
