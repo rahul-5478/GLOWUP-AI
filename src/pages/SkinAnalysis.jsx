@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 const hasPro = () => localStorage.getItem("glowup_skin_pro") === "true";
 const setPro = () => localStorage.setItem("glowup_skin_pro", "true");
 
-// ─── Dermiq Skin Analyzer — Canvas se real metrics ───────────────────────────
+// ─── Dermiq Skin Analyzer — Canvas real metrics ───────────────────────────
 const analyzeSkinWithDermiq = (imageBase64) => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -141,10 +141,10 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 
 // ─── Grade Config ─────────────────────────────────────────────────────────────
 const GRADE_CONFIG = {
-  A: { color: "#4ade80", label: "Excellent", emoji: "✨", msg: "Tumhari skin bahut healthy hai!" },
-  B: { color: "#60a5fa", label: "Good", emoji: "👍", msg: "Thodi care se aur better ho sakti hai" },
-  C: { color: "#facc15", label: "Fair", emoji: "⚠️", msg: "Regular routine start karo abhi" },
-  D: { color: "#f87171", label: "Needs Care", emoji: "🔴", msg: "Turant dhyan dena zaroori hai" },
+  A: { color: "#4ade80", label: "Excellent", emoji: "✨", msg: "Your skin is very healthy!" },
+  B: { color: "#60a5fa", label: "Good", emoji: "👍", msg: "A little care can make it even better" },
+  C: { color: "#facc15", label: "Fair", emoji: "⚠️", msg: "Start a regular routine now" },
+  D: { color: "#f87171", label: "Needs Care", emoji: "🔴", msg: "Needs immediate attention" },
 };
 
 const METRIC_LABELS = {
@@ -184,7 +184,7 @@ function PaywallModal({ onSubscribe, onClose }) {
 
   const handlePay = () => {
     setPaying(true);
-    // Simulate payment — real mein Razorpay integrate karo
+    // Simulate payment — integrate Razorpay for real payments
     setTimeout(() => {
       setPro();
       setPaying(false);
@@ -199,10 +199,10 @@ function PaywallModal({ onSubscribe, onClose }) {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 10 }}>🧴</div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 6 }}>
-            Skin Pro Unlock karo
+            Unlock Skin Pro
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
-            AI detailed analysis, home remedies aur<br />personalized skincare plan ke liye
+            For AI detailed analysis, home remedies & personalized skincare plan
           </div>
         </div>
 
@@ -223,7 +223,7 @@ function PaywallModal({ onSubscribe, onClose }) {
 
         {/* Price */}
         <div style={{ marginTop: 20, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 16, padding: 16, textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>Sirf</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>Only</div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 900, color: "#f87171" }}>₹20
             <span style={{ fontSize: 14, fontWeight: 400, color: "rgba(255,255,255,0.4)" }}>/month</span>
           </div>
@@ -242,7 +242,7 @@ function PaywallModal({ onSubscribe, onClose }) {
 
         <button onClick={onClose}
           style={{ width: "100%", padding: "12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, background: "transparent", color: "rgba(255,255,255,0.4)", fontFamily: "var(--font-body)", fontSize: 13, cursor: "pointer" }}>
-          Baad mein
+          Later
         </button>
       </div>
     </div>
@@ -344,7 +344,7 @@ export default function SkinAnalysis() {
 
     try {
       // Step 1: Dermiq scan
-      setLoadingStep("🔬 Dermiq AI skin scan ho rahi hai...");
+      setLoadingStep("🔬 Dermiq AI scanning your skin...");
       const dermiq = await analyzeSkinWithDermiq(imageBase64);
       setDermiqData(dermiq);
 
@@ -357,7 +357,7 @@ export default function SkinAnalysis() {
       }
 
       // Step 3: AI analysis
-      setLoadingStep("🤖 AI detailed analysis kar raha hai...");
+      setLoadingStep("🤖 AI performing detailed analysis...");
       const ai = await getAIAnalysis(dermiq);
       setAiResult(ai);
       setActiveTab("overview");
@@ -366,7 +366,7 @@ export default function SkinAnalysis() {
       localStorage.setItem("glowup_skin_count", prev + 1);
 
     } catch (err) {
-      setError("Analysis fail hui. Dobara try karo.");
+      setError("Analysis failed. Please try again.");
       console.error(err);
     }
 
@@ -380,13 +380,13 @@ export default function SkinAnalysis() {
     // Continue with AI analysis after subscribe
     if (dermiqData) {
       setLoading(true);
-      setLoadingStep("🤖 AI detailed analysis kar raha hai...");
+      setLoadingStep("🤖 AI performing detailed analysis...");
       try {
         const ai = await getAIAnalysis(dermiqData);
         setAiResult(ai);
         setActiveTab("overview");
       } catch (e) {
-        setError("AI analysis fail hui.");
+        setError("AI analysis failed.");
       }
       setLoading(false);
       setLoadingStep("");
@@ -427,7 +427,7 @@ export default function SkinAnalysis() {
               </span>
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
-              Dermiq AI scan · Products · Home Remedies · Plan
+              Dermiq AI scan · Products · Home Remedies · 4-Week Plan
             </div>
           </div>
           {isPro ? (
@@ -452,7 +452,7 @@ export default function SkinAnalysis() {
             {!camActive && !camError && (
               <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: "rgba(0,0,0,0.85)" }}>
                 <div style={{ fontSize: 32 }}>📸</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff" }}>Camera shuru ho rahi hai...</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff" }}>Starting camera...</div>
               </div>
             )}
             {camActive && (
@@ -469,7 +469,7 @@ export default function SkinAnalysis() {
                   🔬 Dermiq AI Ready
                 </div>
                 <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "8px 14px", background: "rgba(0,0,0,0.75)", borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
-                  😊 Chehra frame ke andar rakho — acche light mein
+                  😊 Keep face inside frame — in good lighting
                 </div>
               </>
             )}
@@ -516,8 +516,8 @@ export default function SkinAnalysis() {
             <div style={{ fontSize: 44, marginBottom: 10 }}>🔬</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "#f0f0ff", marginBottom: 6 }}>Dermiq Skin Scan</div>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.7 }}>
-              Camera se live scan karo ya gallery se upload karo<br />
-              AI skin tone, acne, dark spots, pores detect karega
+              Take a live scan or upload from gallery<br />
+              AI detects skin tone, acne, dark spots & pores
             </div>
           </div>
         </div>
@@ -541,7 +541,7 @@ export default function SkinAnalysis() {
       {imageBase64 && !loading && !camMode && (
         <button onClick={analyze}
           style={{ width: "100%", padding: "16px", border: "none", borderRadius: 16, background: "linear-gradient(135deg,#f87171,#fb923c)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", marginBottom: 16, boxShadow: "0 8px 24px rgba(248,113,113,0.35)", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          🔬 Dermiq AI se Analyze Karo
+          🔬 Analyze with Dermiq AI
         </button>
       )}
 
@@ -619,13 +619,13 @@ export default function SkinAnalysis() {
               style={{ background: "linear-gradient(135deg, rgba(248,113,113,0.1), rgba(251,146,60,0.1))", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 20, padding: 20, marginBottom: 16, cursor: "pointer", textAlign: "center" }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>🔒</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: "#f87171", marginBottom: 6 }}>
-                Full Analysis Unlock karo
+                Unlock Full Analysis
               </div>
               <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 14 }}>
                 Products · Home Remedies · 4-Week Plan · Diet Tips
               </div>
               <div style={{ display: "inline-block", padding: "10px 24px", borderRadius: 14, background: "linear-gradient(135deg,#f87171,#fb923c)", fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "#fff" }}>
-                ₹20/month Subscribe karo 👑
+                Subscribe for ₹20/month 👑
               </div>
             </div>
           )}
@@ -676,7 +676,7 @@ export default function SkinAnalysis() {
                   )}
                   {aiResult.avoid?.length > 0 && (
                     <div style={{ background: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)", borderRadius: 14, padding: 14 }}>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#f87171", fontWeight: 700, marginBottom: 8 }}>❌ AVOID KARO</div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "#f87171", fontWeight: 700, marginBottom: 8 }}>❌ AVOID THESE</div>
                       {aiResult.avoid.map((a, i) => (
                         <div key={i} style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(248,113,113,0.7)", padding: "3px 0" }}>• {a}</div>
                       ))}
@@ -746,7 +746,7 @@ export default function SkinAnalysis() {
               {activeTab === "remedies" && (
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
-                    🌿 Natural DIY remedies — ghar pe available ingredients
+                    🌿 Natural DIY remedies — ingredients available at home
                   </div>
                   {aiResult.homeRemedies?.map((remedy, i) => (
                     <div key={i} style={{ background: "rgba(74,222,128,0.04)", border: "1px solid rgba(74,222,128,0.12)", borderRadius: 18, marginBottom: 12, overflow: "hidden" }}>
@@ -797,7 +797,7 @@ export default function SkinAnalysis() {
               {activeTab === "plan" && (
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
-                    Consistently follow karo — tap to expand
+                    Follow consistently — tap to expand
                   </div>
                   {["week1","week2","week3","week4"].map((w, idx) => {
                     const weekData = aiResult.weeklyPlan?.[w];
@@ -859,7 +859,7 @@ export default function SkinAnalysis() {
                 <div>
                   {aiResult.dietTips?.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#facc15", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>🥗 SKIN KE LIYE DIET</div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#facc15", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>🥗 DIET FOR HEALTHY SKIN</div>
                       {aiResult.dietTips.map((tip, i) => (
                         <div key={i} style={{ background: "rgba(250,204,21,0.05)", border: "1px solid rgba(250,204,21,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(250,204,21,0.8)" }}>
                           🍽️ {tip}
@@ -869,7 +869,7 @@ export default function SkinAnalysis() {
                   )}
                   {aiResult.avoid?.length > 0 && (
                     <div>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#f87171", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>❌ AVOID KARO</div>
+                      <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "#f87171", fontWeight: 700, marginBottom: 10, letterSpacing: 1 }}>❌ AVOID THESE</div>
                       {aiResult.avoid.map((a, i) => (
                         <div key={i} style={{ background: "rgba(248,113,113,0.05)", border: "1px solid rgba(248,113,113,0.1)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, fontFamily: "var(--font-body)", fontSize: 13, color: "rgba(248,113,113,0.7)" }}>
                           🚫 {a}
@@ -883,7 +883,7 @@ export default function SkinAnalysis() {
               {/* Rescan Button */}
               <button onClick={() => { setDermiqData(null); setAiResult(null); setImageBase64(null); setImagePreview(null); }}
                 style={{ width: "100%", marginTop: 8, padding: "13px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, background: "transparent", color: "rgba(255,255,255,0.4)", fontFamily: "var(--font-body)", fontSize: 13, cursor: "pointer" }}>
-                🔄 Dobara Scan Karo
+                🔄 Scan Again
               </button>
             </div>
           )}
