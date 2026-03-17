@@ -501,21 +501,32 @@ export default function FaceAnalysis() {
     <div style={{ padding: "0 16px 100px" }} className="tab-content">
       <SectionTitle icon="✨" title={t.faceTitle} subtitle={t.faceSubtitle} />
 
-      {/* Mode Toggle — sirf Live Camera */}
-      <div style={{ marginBottom: 14 }}>
-        <div
-          onClick={handleLiveMode}
-          style={{
-            width: "100%", padding: "13px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-            background: mode === "live" ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
-            border: `1px solid ${mode === "live" ? "transparent" : "var(--border)"}`,
-            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700,
-            color: mode === "live" ? "#fff" : "var(--muted)", transition: "all 0.2s",
-            boxShadow: mode === "live" ? "0 8px 24px rgba(81,207,102,0.25)" : "none",
-          }}>
-          🔴 Live Camera se Analyze karo
+      {/* Start Screen — show only when no image captured */}
+      {mode !== "live" && mode !== "captured" && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, padding: 24, marginBottom: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>✨</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+            Face Shape Analysis
+          </div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--muted)", marginBottom: 20, lineHeight: 1.6 }}>
+            MediaPipe AI will detect your face shape in real-time and Gemini AI will recommend the best haircuts for you
+          </div>
+          <div onClick={handleLiveMode}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", borderRadius: 16, background: "linear-gradient(135deg,#51CF66,#20C997)", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", boxShadow: "0 8px 24px rgba(81,207,102,0.3)" }}>
+            🔴 Start Live Camera Scan
+          </div>
+          <div style={{ marginTop: 12, fontFamily: "var(--font-body)", fontSize: 11, color: "var(--muted)" }}>
+            Allow camera permission when asked
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Back to camera button when in captured mode */}
+      {mode === "captured" && (
+        <div onClick={handleLiveMode} style={{ marginBottom: 10, padding: "10px 14px", borderRadius: 12, background: "var(--card)", border: "1px solid var(--border)", fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", cursor: "pointer", textAlign: "center" }}>
+          🔄 Scan Again with Live Camera
+        </div>
+      )}
 
       {/* ─── LIVE CAMERA MODE ──────────────────────────────────────────────────── */}
       {mode === "live" && (
@@ -671,8 +682,8 @@ export default function FaceAnalysis() {
         </div>
       )}
 
-      {/* Gender + Analyze */}
-      {imagePreview && !loading && (
+      {/* Gender + Analyze — only show after live camera capture */}
+      {imagePreview && mode === "captured" && !loading && (
         <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
