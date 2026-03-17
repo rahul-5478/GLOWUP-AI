@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react";
-import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
 import { GlowButton, SectionTitle, Card, LoadingDots, ErrorMessage } from "../components/UI";
 import { useLang } from "../hooks/useLanguage";
 import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
@@ -248,7 +247,6 @@ const getStylesAvoid = (shape, gender) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function FaceAnalysis() {
   const { t } = useLang();
-  const { getPhoto } = useCapacitorCamera();
   const [imagePreview, setImagePreview] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -339,20 +337,6 @@ export default function FaceAnalysis() {
       // Also try MediaPipe for face detection overlay
       try { await startCamera(); } catch (_) {}
     }
-  };
-
-  // ─── Handle Upload/Gallery/Camera ────────────────────────────────────────────
-  const handleCapture = async (source) => {
-    setError("");
-    setSelectedGender(null);
-    setResult(null);
-    stopCamera();
-    stopBrowserCamera();
-    setMode("upload");
-    const { base64, dataUrl, error: err } = await getPhoto(source);
-    if (err || !base64) return;
-    setImageBase64(base64);
-    setImagePreview(dataUrl);
   };
 
   // ─── Capture from live camera ────────────────────────────────────────────────
@@ -479,29 +463,19 @@ export default function FaceAnalysis() {
     <div style={{ padding: "0 16px 100px" }} className="tab-content">
       <SectionTitle icon="✨" title={t.faceTitle} subtitle={t.faceSubtitle} />
 
-      {/* Mode Toggle */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <div
-          onClick={() => { setMode("upload"); stopCamera(); stopBrowserCamera(); setResult(null); }}
-          style={{
-            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer", textAlign: "center",
-            background: mode === "upload" || mode === "captured" ? "var(--grad1)" : "var(--card)",
-            border: `1px solid ${mode === "upload" || mode === "captured" ? "transparent" : "var(--border)"}`,
-            fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
-            color: mode === "upload" || mode === "captured" ? "#fff" : "var(--muted)", transition: "all 0.2s",
-          }}>
-          📷 Upload Photo
-        </div>
+      {/* Mode Toggle — sirf Live Camera */}
+      <div style={{ marginBottom: 14 }}>
         <div
           onClick={handleLiveMode}
           style={{
-            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer", textAlign: "center",
+            width: "100%", padding: "13px", borderRadius: 14, cursor: "pointer", textAlign: "center",
             background: mode === "live" ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
             border: `1px solid ${mode === "live" ? "transparent" : "var(--border)"}`,
-            fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
+            fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700,
             color: mode === "live" ? "#fff" : "var(--muted)", transition: "all 0.2s",
+            boxShadow: mode === "live" ? "0 8px 24px rgba(81,207,102,0.25)" : "none",
           }}>
-          🔴 Live Camera
+          🔴 Live Camera se Analyze karo
         </div>
       </div>
 
@@ -610,33 +584,19 @@ export default function FaceAnalysis() {
         </div>
       )}
 
-      {/* ─── UPLOAD MODE ──────────────────────────────────────────────────────── */}
-      {(mode === "upload" || mode === "captured") && (
-        <>
-          {mode === "upload" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              <button onClick={() => handleCapture("gallery")} style={{ padding: "13px 10px", border: "1.5px solid var(--border)", borderRadius: 14, background: "var(--card)", color: "var(--text)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                🖼️ Gallery
-              </button>
-              <button onClick={() => handleCapture("camera")} style={{ padding: "13px 10px", border: "none", borderRadius: 14, background: "linear-gradient(135deg,#FF6B6B,#845EF7)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, boxShadow: "0 4px 16px rgba(255,107,107,0.4)" }}>
-                📷 Camera
-              </button>
-            </div>
-          )}
-          {imagePreview && (
-            <div style={{ position: "relative", marginBottom: 14, borderRadius: 20, overflow: "hidden" }}>
-              <img src={imagePreview} alt="selfie" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)", borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16, justifyContent: "space-between" }}>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>✅ Photo ready!</div>
-                {mode === "captured" && liveFaceShape && (
-                  <div style={{ padding: "5px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-                    📐 {liveFaceShape}
-                  </div>
-                )}
+      {/* Captured photo preview */}
+      {mode === "captured" && imagePreview && (
+        <div style={{ position: "relative", marginBottom: 14, borderRadius: 20, overflow: "hidden" }}>
+          <img src={imagePreview} alt="selfie" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 20, display: "block" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)", borderRadius: 20, display: "flex", alignItems: "flex-end", padding: 16, justifyContent: "space-between" }}>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", fontWeight: 600 }}>✅ Photo ready!</div>
+            {liveFaceShape && (
+              <div style={{ padding: "5px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                📐 {liveFaceShape}
               </div>
-            </div>
-          )}
-        </>
+            )}
+          </div>
+        </div>
       )}
 
       <ErrorMessage message={error} />
