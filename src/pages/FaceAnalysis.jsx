@@ -410,7 +410,7 @@ export default function FaceAnalysis() {
         if (!selectedFaceShape) {
           setLoading(false);
           setShowFaceShapePicker(true);
-          setError("Face not detected automatically. Please select your face shape below.");
+          setError("Please use Live Camera so MediaPipe can detect your face shape automatically.");
           return;
         }
         mpAnalysis = { faceShape: selectedFaceShape, jawlineType: "Defined" };
@@ -654,29 +654,19 @@ export default function FaceAnalysis() {
 
       <ErrorMessage message={error} />
 
-      {/* Manual Face Shape Picker — shown when MediaPipe fails */}
+      {/* Camera required message — shown when MediaPipe fails */}
       {showFaceShapePicker && imagePreview && (
-        <div style={{ background: "var(--card)", border: "1px solid rgba(77,150,255,0.3)", borderRadius: 18, padding: 16, marginBottom: 14 }}>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-            📐 Select Your Face Shape
+        <div style={{ background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 18, padding: 16, marginBottom: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "#FF6B6B", marginBottom: 6 }}>
+            Please use Live Camera
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
-            MediaPipe could not detect automatically — please select manually
+            MediaPipe AI needs live camera to detect your face shape accurately
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {["Oval", "Round", "Square", "Heart", "Oblong", "Diamond"].map(shape => (
-              <div key={shape} onClick={() => { setSelectedFaceShape(shape.toLowerCase()); setShowFaceShapePicker(false); setError(""); }}
-                style={{
-                  padding: "9px 16px", borderRadius: 20, cursor: "pointer",
-                  background: selectedFaceShape === shape.toLowerCase() ? "rgba(77,150,255,0.15)" : "var(--surface)",
-                  border: `1.5px solid ${selectedFaceShape === shape.toLowerCase() ? "#4D96FF" : "var(--border)"}`,
-                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
-                  color: selectedFaceShape === shape.toLowerCase() ? "#4D96FF" : "var(--muted)",
-                  transition: "all 0.2s",
-                }}>
-                {shape}
-              </div>
-            ))}
+          <div onClick={() => { setShowFaceShapePicker(false); handleLiveMode(); }}
+            style={{ display: "inline-block", padding: "10px 24px", borderRadius: 14, background: "linear-gradient(135deg,#51CF66,#20C997)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
+            🔴 Open Live Camera
           </div>
         </div>
       )}
@@ -686,7 +676,7 @@ export default function FaceAnalysis() {
         <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
-              Accurate results ke liye gender select karo:
+              Select your gender for accurate results:
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {["Male", "Female"].map(g => (
