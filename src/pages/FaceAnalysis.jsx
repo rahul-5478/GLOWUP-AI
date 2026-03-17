@@ -1,172 +1,142 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { faceAPI } from "../utils/api";
 import { useCapacitorCamera } from "../hooks/useCapacitorCamera";
 import { GlowButton, SectionTitle, Card, LoadingDots, ResultCard, ErrorMessage } from "../components/UI";
 import { useLang } from "../hooks/useLanguage";
 import { useMediaPipeFace } from "../hooks/useMediaPipeFace";
 
-// ─── Hairstyle Images (Fallback only — Pexels se real images aayenge) ─────────
-const HAIRSTYLE_IMAGES = {
-  "undercut": "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&q=80",
-  "fade": "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&q=80",
-  "quiff": "https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=400&q=80",
-  "pompadour": "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=400&q=80",
-  "buzz": "https://images.unsplash.com/photo-1593702288056-7cc68c0d1c96?w=400&q=80",
-  "crew": "https://images.unsplash.com/photo-1567894340315-735d7c361db0?w=400&q=80",
-  "slick": "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=400&q=80",
-  "textured": "https://images.unsplash.com/photo-1546961342-ea5f62d5a27b?w=400&q=80",
-  "french crop": "https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=400&q=80",
-  "side part": "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=400&q=80",
-  "messy": "https://images.unsplash.com/photo-1546961342-ea5f62d5a27b?w=400&q=80",
-  "taper": "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&q=80",
-  "mohawk": "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=400&q=80",
-  "caesar": "https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=400&q=80",
-  "ivy league": "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=400&q=80",
-  "bob": "https://images.unsplash.com/photo-1605980776566-0486c3ac7617?w=400&q=80",
-  "pixie": "https://images.unsplash.com/photo-1524502397800-2eeaad7c3fe5?w=400&q=80",
-  "layered": "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=400&q=80",
-  "lob": "https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=400&q=80",
-  "bangs": "https://images.unsplash.com/photo-1523264653568-d3d4032d1476?w=400&q=80",
-  "bun": "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=400&q=80",
-  "braid": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&q=80",
-  "straight": "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&q=80",
-  "curly": "https://images.unsplash.com/photo-1559620192-032c4bc4674e?w=400&q=80",
-  "wavy": "https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?w=400&q=80",
-  "default_female": "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=400&q=80",
-  "default_male": "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&q=80",
-  "default": "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=400&q=80",
+// ─── 🔑 APNI PEXELS API KEY YAHAN LAGAO ──────────────────────────────────────
+const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY;
+
+// ─── Pexels se real-time image fetch karne wala function ─────────────────────
+const fetchPexelsImage = async (query) => {
+  try {
+    const res = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query + " hairstyle")}&per_page=1&orientation=portrait`,
+      { headers: { Authorization: PEXELS_API_KEY } }
+    );
+    const data = await res.json();
+    if (data.photos && data.photos.length > 0) {
+      return data.photos[0].src.medium;
+    }
+  } catch (e) {
+    console.warn("Pexels fetch failed for:", query);
+  }
+  return null;
 };
 
+// ─── Pexels images cache (baar baar same query na ho) ────────────────────────
+const pexelsCache = {};
+
+const getOrFetchPexels = async (query) => {
+  if (pexelsCache[query]) return pexelsCache[query];
+  const url = await fetchPexelsImage(query);
+  if (url) pexelsCache[query] = url;
+  return url;
+};
+
+// ─── Fallback images (agar Pexels fail ho) ───────────────────────────────────
+const FALLBACK_IMAGES = {
+  male: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&q=80",
+  female: "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=400&q=80",
+};
+
+// ─── Hairstyle Databases ──────────────────────────────────────────────────────
 const MALE_HAIRSTYLES = {
   round: [
-    { name: "Quiff", img: "quiff", reason: "Adds height on top, makes face look longer and leaner", maintenance: "Medium", time: "10-15 min", bestFor: "Thick hair", avoid: "Too much side volume" },
-    { name: "High Fade Undercut", img: "undercut", reason: "Short sides reduce width, longer top creates vertical illusion", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Round styling on top" },
-    { name: "Pompadour", img: "pompadour", reason: "Strong volume on top elongates round face perfectly", maintenance: "High", time: "20 min", bestFor: "Thick straight hair", avoid: "Flat styling" },
-    { name: "Taper Fade", img: "taper", reason: "Clean sides with length on top — ideal combo for round faces", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Wide side parts" },
-    { name: "French Crop", img: "french crop", reason: "Textured top with tight sides creates angular look", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Fluffy top" },
-    { name: "Side Part Slick", img: "slick", reason: "Deep side part creates asymmetry that breaks round shape", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Center parting" },
-    { name: "Mohawk Fade", img: "mohawk", reason: "Central strip of height makes face appear longer", maintenance: "Medium", time: "15 min", bestFor: "Medium thick hair", avoid: "Wide mohawk strips" },
+    { name: "Quiff", pexelsQuery: "men quiff hairstyle", reason: "Adds height on top, makes face look longer and leaner", maintenance: "Medium", time: "10-15 min", bestFor: "Thick hair", avoid: "Too much side volume" },
+    { name: "High Fade Undercut", pexelsQuery: "men fade undercut haircut", reason: "Short sides reduce width, longer top creates vertical illusion", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Round styling on top" },
+    { name: "Pompadour", pexelsQuery: "men pompadour hairstyle", reason: "Strong volume on top elongates round face perfectly", maintenance: "High", time: "20 min", bestFor: "Thick straight hair", avoid: "Flat styling" },
+    { name: "Taper Fade", pexelsQuery: "men taper fade haircut", reason: "Clean sides with length on top — ideal combo for round faces", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Wide side parts" },
+    { name: "French Crop", pexelsQuery: "men french crop haircut", reason: "Textured top with tight sides creates angular look", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Fluffy top" },
+    { name: "Mohawk Fade", pexelsQuery: "men mohawk fade haircut", reason: "Central strip of height makes face appear longer", maintenance: "Medium", time: "15 min", bestFor: "Medium thick hair", avoid: "Wide mohawk strips" },
   ],
   oval: [
-    { name: "Textured Quiff", img: "quiff", reason: "Oval face suits almost everything — quiff shows off balance", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Nothing — you're lucky!" },
-    { name: "Slick Back", img: "slick", reason: "Reveals your balanced proportions — classic and timeless", maintenance: "Medium", time: "10 min", bestFor: "Straight to wavy", avoid: "Too much product" },
-    { name: "High Fade Undercut", img: "undercut", reason: "Modern clean look that works perfectly with oval face", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Nothing specific" },
-    { name: "Crew Cut", img: "crew", reason: "Sharp and clean — highlights your well-balanced features", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Too long on top" },
-    { name: "Ivy League", img: "ivy league", reason: "Sophisticated side-parted style for well-proportioned faces", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Messy application" },
-    { name: "Pompadour", img: "pompadour", reason: "Dramatic style that oval faces carry perfectly", maintenance: "High", time: "20 min", bestFor: "Thick hair", avoid: "Flat sides" },
-    { name: "Buzz Cut", img: "buzz", reason: "Confident minimal style — oval faces pull it off best", maintenance: "Low", time: "1 min", bestFor: "All hair types", avoid: "If you have scars/bumps" },
+    { name: "Textured Quiff", pexelsQuery: "men textured quiff haircut", reason: "Oval face suits almost everything — quiff shows off balance", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Nothing — you're lucky!" },
+    { name: "Slick Back", pexelsQuery: "men slick back hair", reason: "Reveals your balanced proportions — classic and timeless", maintenance: "Medium", time: "10 min", bestFor: "Straight to wavy", avoid: "Too much product" },
+    { name: "High Fade Undercut", pexelsQuery: "men fade undercut haircut", reason: "Modern clean look that works perfectly with oval face", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Nothing specific" },
+    { name: "Crew Cut", pexelsQuery: "men crew cut hairstyle", reason: "Sharp and clean — highlights your well-balanced features", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Too long on top" },
+    { name: "Pompadour", pexelsQuery: "men pompadour hairstyle", reason: "Dramatic style that oval faces carry perfectly", maintenance: "High", time: "20 min", bestFor: "Thick hair", avoid: "Flat sides" },
+    { name: "Buzz Cut", pexelsQuery: "men buzz cut short hair", reason: "Confident minimal style — oval faces pull it off best", maintenance: "Low", time: "1 min", bestFor: "All hair types", avoid: "If you have scars/bumps" },
   ],
   square: [
-    { name: "Textured Crop", img: "textured", reason: "Soft texture at top reduces the sharpness of strong jawline", maintenance: "Low", time: "5 min", bestFor: "Medium hair", avoid: "Geometric sharp lines" },
-    { name: "Side Part", img: "side part", reason: "Asymmetry breaks the symmetrical squareness of face", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Very deep center part" },
-    { name: "Messy Waves", img: "messy", reason: "Wavy texture adds natural softness to sharp angular jaw", maintenance: "Low", time: "5 min", bestFor: "Wavy hair", avoid: "Hard lines and sharp edges" },
-    { name: "Caesar Cut", img: "caesar", reason: "Forward fringe softens strong forehead and jaw", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Very short fringe" },
-    { name: "Long Top Undercut", img: "undercut", reason: "Length on top softens square shape with movement", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Blunt straight top" },
-    { name: "Quiff", img: "quiff", reason: "Height on top distracts from wide jawline", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Wide flat quiff" },
-    { name: "Curly Natural", img: "messy", reason: "Natural curls soften angular features beautifully", maintenance: "Low", time: "3 min", bestFor: "Curly/wavy hair", avoid: "Slicked back styles" },
+    { name: "Textured Crop", pexelsQuery: "men textured crop haircut", reason: "Soft texture at top reduces the sharpness of strong jawline", maintenance: "Low", time: "5 min", bestFor: "Medium hair", avoid: "Geometric sharp lines" },
+    { name: "Side Part", pexelsQuery: "men side part hairstyle", reason: "Asymmetry breaks the symmetrical squareness of face", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Very deep center part" },
+    { name: "Messy Waves", pexelsQuery: "men messy wavy hair", reason: "Wavy texture adds natural softness to sharp angular jaw", maintenance: "Low", time: "5 min", bestFor: "Wavy hair", avoid: "Hard lines and sharp edges" },
+    { name: "Caesar Cut", pexelsQuery: "men caesar cut haircut", reason: "Forward fringe softens strong forehead and jaw", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Very short fringe" },
+    { name: "Quiff", pexelsQuery: "men quiff hairstyle", reason: "Height on top distracts from wide jawline", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Wide flat quiff" },
   ],
   oblong: [
-    { name: "Side Part", img: "side part", reason: "Horizontal line adds visual width to elongated face", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Center part" },
-    { name: "Messy Textured Short", img: "messy", reason: "Volume on sides fills out narrow face width", maintenance: "Low", time: "3 min", bestFor: "Medium hair", avoid: "Long straight hair" },
-    { name: "Crew Cut", img: "crew", reason: "Even length all around prevents further elongation", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Extra height on top" },
-    { name: "Caesar Cut", img: "caesar", reason: "Fringe significantly shortens visible forehead length", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Swept back styles" },
-    { name: "Buzz Cut with Fade", img: "buzz", reason: "Uniform length minimizes face length perception", maintenance: "Low", time: "1 min", bestFor: "All hair types", avoid: "Height boosting styles" },
-    { name: "Side Swept Fringe", img: "french crop", reason: "Diagonal fringe breaks vertical length of face", maintenance: "Low", time: "5 min", bestFor: "Fine to medium", avoid: "Upward quiff" },
-    { name: "Taper with Side Volume", img: "taper", reason: "Volume at sides adds width without height", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Very high top" },
+    { name: "Side Part", pexelsQuery: "men side part hairstyle", reason: "Horizontal line adds visual width to elongated face", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Center part" },
+    { name: "Crew Cut", pexelsQuery: "men crew cut hairstyle", reason: "Even length all around prevents further elongation", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Extra height on top" },
+    { name: "Caesar Cut", pexelsQuery: "men caesar cut haircut", reason: "Fringe significantly shortens visible forehead length", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Swept back styles" },
+    { name: "Taper with Side Volume", pexelsQuery: "men taper fade side volume", reason: "Volume at sides adds width without height", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Very high top" },
+    { name: "Buzz Cut", pexelsQuery: "men buzz cut short hair", reason: "Uniform length minimizes face length perception", maintenance: "Low", time: "1 min", bestFor: "All hair types", avoid: "Height boosting styles" },
   ],
   heart: [
-    { name: "Side Swept Undercut", img: "undercut", reason: "Reduces wide forehead, draws attention to chin area", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Wide top volume" },
-    { name: "Textured Crop with Fringe", img: "textured", reason: "Light fringe balances heart shaped forehead", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Extreme height" },
-    { name: "Quiff", img: "quiff", reason: "Controlled height without too much forehead volume", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Very wide quiff" },
-    { name: "Crew Cut", img: "crew", reason: "Neat and clean — works very well with heart face", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Too much top height" },
-    { name: "Side Part", img: "side part", reason: "Asymmetry balances wide forehead naturally", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Center part" },
-    { name: "French Crop", img: "french crop", reason: "Textured fringe breaks forehead width", maintenance: "Low", time: "5 min", bestFor: "Fine hair", avoid: "Backward swept styles" },
-    { name: "Taper Fade", img: "taper", reason: "Clean precise cut that balances heart shape", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Flared sides" },
+    { name: "Side Swept Undercut", pexelsQuery: "men side swept undercut", reason: "Reduces wide forehead, draws attention to chin area", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Wide top volume" },
+    { name: "Textured Crop with Fringe", pexelsQuery: "men textured crop fringe", reason: "Light fringe balances heart shaped forehead", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Extreme height" },
+    { name: "Crew Cut", pexelsQuery: "men crew cut hairstyle", reason: "Neat and clean — works very well with heart face", maintenance: "Low", time: "2 min", bestFor: "All hair types", avoid: "Too much top height" },
+    { name: "French Crop", pexelsQuery: "men french crop haircut", reason: "Textured fringe breaks forehead width", maintenance: "Low", time: "5 min", bestFor: "Fine hair", avoid: "Backward swept styles" },
+    { name: "Taper Fade", pexelsQuery: "men taper fade haircut", reason: "Clean precise cut that balances heart shape", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Flared sides" },
   ],
   diamond: [
-    { name: "Side Part Pompadour", img: "pompadour", reason: "Forehead volume balances narrow chin of diamond face", maintenance: "High", time: "20 min", bestFor: "Thick hair", avoid: "Cheekbone volume" },
-    { name: "Quiff", img: "quiff", reason: "Height at forehead balances prominent cheekbones", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Wide side volume" },
-    { name: "Textured Crop", img: "textured", reason: "Width at top helps balance narrow forehead", maintenance: "Low", time: "5 min", bestFor: "Medium hair", avoid: "Tight sides only" },
-    { name: "Slick Back", img: "slick", reason: "Reveals face structure elegantly for diamond shape", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Too flat application" },
-    { name: "Caesar Crop", img: "caesar", reason: "Fringe adds width to narrow forehead area", maintenance: "Low", time: "5 min", bestFor: "Fine to medium", avoid: "High swept styles" },
-    { name: "Side Swept", img: "side part", reason: "Diagonal adds width where diamond needs it most", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Center parting" },
-    { name: "Undercut", img: "undercut", reason: "Clean sides with top volume balances diamond proportions", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Middle volume" },
+    { name: "Side Part Pompadour", pexelsQuery: "men side part pompadour", reason: "Forehead volume balances narrow chin of diamond face", maintenance: "High", time: "20 min", bestFor: "Thick hair", avoid: "Cheekbone volume" },
+    { name: "Quiff", pexelsQuery: "men quiff hairstyle", reason: "Height at forehead balances prominent cheekbones", maintenance: "Medium", time: "10 min", bestFor: "Thick hair", avoid: "Wide side volume" },
+    { name: "Caesar Crop", pexelsQuery: "men caesar cut haircut", reason: "Fringe adds width to narrow forehead area", maintenance: "Low", time: "5 min", bestFor: "Fine to medium", avoid: "High swept styles" },
+    { name: "Undercut", pexelsQuery: "men undercut hairstyle", reason: "Clean sides with top volume balances diamond proportions", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Middle volume" },
+    { name: "Slick Back", pexelsQuery: "men slick back hair", reason: "Reveals face structure elegantly for diamond shape", maintenance: "Medium", time: "10 min", bestFor: "Straight hair", avoid: "Too flat application" },
   ],
 };
 
 const FEMALE_HAIRSTYLES = {
   round: [
-    { name: "Long Layers", img: "layered", reason: "Lengthens face and adds beautiful vertical movement", maintenance: "Medium", time: "15 min", bestFor: "Medium to thick hair", avoid: "Chin length blunt cuts" },
-    { name: "Lob with Side Part", img: "lob", reason: "Below chin length with side part slims round face perfectly", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Center part" },
-    { name: "Side Swept Bangs", img: "bangs", reason: "Creates diagonal line across forehead, reduces roundness", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
-    { name: "Sleek Straight Long", img: "straight", reason: "Long straight hair visually elongates face shape", maintenance: "Medium", time: "20 min", bestFor: "Straight to wavy", avoid: "Lots of volume at sides" },
-    { name: "Wavy Lob", img: "wavy", reason: "Waves below jaw create length illusion for round face", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Chin level volume" },
-    { name: "High Ponytail", img: "bun", reason: "Lifts face appearance, adds height and length", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Low ponytail at ears" },
-    { name: "Curtain Bangs", img: "bangs", reason: "Soft parted bangs frame face and reduce roundness", maintenance: "Medium", time: "10 min", bestFor: "Thin to medium hair", avoid: "Blunt straight fringe" },
-    { name: "Long Curls", img: "curly", reason: "Long curls fall below jaw, adding beautiful elongation", maintenance: "High", time: "30 min", bestFor: "Naturally curly", avoid: "Short tight curls" },
+    { name: "Long Layers", pexelsQuery: "women long layered hair", reason: "Lengthens face and adds beautiful vertical movement", maintenance: "Medium", time: "15 min", bestFor: "Medium to thick hair", avoid: "Chin length blunt cuts" },
+    { name: "Lob with Side Part", pexelsQuery: "women lob side part hairstyle", reason: "Below chin length with side part slims round face perfectly", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Center part" },
+    { name: "Side Swept Bangs", pexelsQuery: "women side swept bangs", reason: "Creates diagonal line across forehead, reduces roundness", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
+    { name: "Curtain Bangs", pexelsQuery: "women curtain bangs hairstyle", reason: "Soft parted bangs frame face and reduce roundness", maintenance: "Medium", time: "10 min", bestFor: "Thin to medium hair", avoid: "Blunt straight fringe" },
+    { name: "High Ponytail", pexelsQuery: "women high ponytail hairstyle", reason: "Lifts face appearance, adds height and length", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Low ponytail at ears" },
+    { name: "Wavy Lob", pexelsQuery: "women wavy lob haircut", reason: "Waves below jaw create length illusion for round face", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Chin level volume" },
   ],
   oval: [
-    { name: "Layered Bob", img: "bob", reason: "Shows off your perfect oval proportions beautifully", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Nothing — try everything!" },
-    { name: "Pixie Cut", img: "pixie", reason: "Bold and stunning — oval faces carry pixie cut best", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Very long sides" },
-    { name: "Wavy Long", img: "wavy", reason: "Any length works — waves add beautiful texture", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Nothing specific" },
-    { name: "Blunt Bob", img: "bob", reason: "Clean strong lines complement balanced oval proportions", maintenance: "Medium", time: "15 min", bestFor: "Straight hair", avoid: "Too much layering" },
-    { name: "Curtain Bangs", img: "bangs", reason: "Trendy style that oval faces pull off effortlessly", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Too thick bangs" },
-    { name: "Natural Curls Medium", img: "curly", reason: "Natural curls frame oval face with gorgeous movement", maintenance: "High", time: "20 min", bestFor: "Naturally curly", avoid: "Over-straightening" },
-    { name: "Sleek Ponytail", img: "bun", reason: "Versatile style that suits oval shape perfectly", maintenance: "Low", time: "5 min", bestFor: "All hair types", avoid: "Nothing specific" },
-    { name: "Lob", img: "lob", reason: "Perfect medium length — oval faces look great at any length", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Nothing specific" },
+    { name: "Layered Bob", pexelsQuery: "women layered bob haircut", reason: "Shows off your perfect oval proportions beautifully", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Nothing — try everything!" },
+    { name: "Pixie Cut", pexelsQuery: "women pixie cut short hair", reason: "Bold and stunning — oval faces carry pixie cut best", maintenance: "Low", time: "5 min", bestFor: "Fine to medium hair", avoid: "Very long sides" },
+    { name: "Wavy Long", pexelsQuery: "women long wavy hair", reason: "Any length works — waves add beautiful texture", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Nothing specific" },
+    { name: "Blunt Bob", pexelsQuery: "women blunt bob haircut", reason: "Clean strong lines complement balanced oval proportions", maintenance: "Medium", time: "15 min", bestFor: "Straight hair", avoid: "Too much layering" },
+    { name: "Curtain Bangs", pexelsQuery: "women curtain bangs hairstyle", reason: "Trendy style that oval faces pull off effortlessly", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Too thick bangs" },
+    { name: "Natural Curls", pexelsQuery: "women natural curly hair medium", reason: "Natural curls frame oval face with gorgeous movement", maintenance: "High", time: "20 min", bestFor: "Naturally curly", avoid: "Over-straightening" },
   ],
   square: [
-    { name: "Soft Wavy Long", img: "wavy", reason: "Waves naturally soften angular jawline beautifully", maintenance: "Medium", time: "20 min", bestFor: "All hair types", avoid: "Blunt geometric cuts" },
-    { name: "Long Layered", img: "layered", reason: "Layers at face level soften strong square features", maintenance: "Medium", time: "20 min", bestFor: "Medium to thick", avoid: "Blunt one-length" },
-    { name: "Side Swept Bangs", img: "bangs", reason: "Asymmetry softens the symmetrical squareness", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
-    { name: "Soft Curly Bob", img: "curly", reason: "Curls at jaw level add softness to hard features", maintenance: "High", time: "25 min", bestFor: "Curly/wavy hair", avoid: "Straight blunt styles" },
-    { name: "Lob with Waves", img: "lob", reason: "Wavy lob below jaw softens jaw width naturally", maintenance: "Medium", time: "20 min", bestFor: "All hair types", avoid: "Blunt lob" },
-    { name: "Long Side Part", img: "straight", reason: "Side part breaks the symmetry of square jaw", maintenance: "Low", time: "10 min", bestFor: "Straight hair", avoid: "Center parting" },
-    { name: "Curtain Bangs", img: "bangs", reason: "Soft curtain bangs reduce harsh forehead angles", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
-    { name: "Loose Braid", img: "braid", reason: "Loose braids soften strong features gracefully", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Tight slick braids" },
+    { name: "Soft Wavy Long", pexelsQuery: "women soft wavy long hair", reason: "Waves naturally soften angular jawline beautifully", maintenance: "Medium", time: "20 min", bestFor: "All hair types", avoid: "Blunt geometric cuts" },
+    { name: "Long Layered", pexelsQuery: "women long layered hair", reason: "Layers at face level soften strong square features", maintenance: "Medium", time: "20 min", bestFor: "Medium to thick", avoid: "Blunt one-length" },
+    { name: "Side Swept Bangs", pexelsQuery: "women side swept bangs", reason: "Asymmetry softens the symmetrical squareness", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
+    { name: "Loose Braid", pexelsQuery: "women loose braid hairstyle", reason: "Loose braids soften strong features gracefully", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Tight slick braids" },
+    { name: "Curtain Bangs", pexelsQuery: "women curtain bangs hairstyle", reason: "Soft curtain bangs reduce harsh forehead angles", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt straight bangs" },
   ],
   oblong: [
-    { name: "Blunt Bob", img: "bob", reason: "Adds horizontal width, significantly reduces face length", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Very long styles" },
-    { name: "Curly Short", img: "curly", reason: "Curls add width from sides and reduce elongated look", maintenance: "High", time: "20 min", bestFor: "Curly hair", avoid: "Long straight styles" },
-    { name: "Bangs with Layers", img: "bangs", reason: "Fringe shortens forehead — biggest help for oblong face", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Swept back styles" },
-    { name: "Wavy Bob", img: "wavy", reason: "Volume at sides reduces face length perception", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Center part with long hair" },
-    { name: "Side Braid", img: "braid", reason: "Side braids add horizontal width to narrow face", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Top buns" },
-    { name: "Shoulder Length with Bangs", img: "lob", reason: "Medium length with bangs perfectly balances oblong", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Extra long styles" },
-    { name: "Voluminous Curls", img: "curly", reason: "Big curls add width at cheeks to balance length", maintenance: "High", time: "25 min", bestFor: "Curly hair", avoid: "Flat lifeless styles" },
+    { name: "Blunt Bob", pexelsQuery: "women blunt bob haircut", reason: "Adds horizontal width, significantly reduces face length", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Very long styles" },
+    { name: "Bangs with Layers", pexelsQuery: "women bangs layered haircut", reason: "Fringe shortens forehead — biggest help for oblong face", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Swept back styles" },
+    { name: "Wavy Bob", pexelsQuery: "women wavy bob haircut", reason: "Volume at sides reduces face length perception", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Center part with long hair" },
+    { name: "Side Braid", pexelsQuery: "women side braid hairstyle", reason: "Side braids add horizontal width to narrow face", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Top buns" },
+    { name: "Voluminous Curls", pexelsQuery: "women voluminous curly hair", reason: "Big curls add width at cheeks to balance length", maintenance: "High", time: "25 min", bestFor: "Curly hair", avoid: "Flat lifeless styles" },
   ],
   heart: [
-    { name: "Chin Length Bob", img: "bob", reason: "Adds width at narrow chin to perfectly balance heart shape", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Top heavy styles" },
-    { name: "Side Swept Bangs", img: "bangs", reason: "Reduces wide forehead — most effective for heart face", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Heavy straight bangs" },
-    { name: "Lob with Waves", img: "lob", reason: "Length below chin balances pointed chin of heart shape", maintenance: "Medium", time: "20 min", bestFor: "All hair types", avoid: "Short above chin cuts" },
-    { name: "Layered Medium", img: "layered", reason: "Volume below cheekbones widens narrow chin area", maintenance: "Medium", time: "20 min", bestFor: "Medium thick hair", avoid: "Very short layers" },
-    { name: "Wavy Long", img: "wavy", reason: "Waves below jaw add width and balance to pointed chin", maintenance: "Medium", time: "20 min", bestFor: "Wavy hair", avoid: "Huge top volume" },
-    { name: "Curtain Bangs", img: "bangs", reason: "Soft curtain bangs reduce wide forehead subtly", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Thick blunt bangs" },
-    { name: "Low Bun", img: "bun", reason: "Low bun adds width at jaw to balance forehead", maintenance: "Low", time: "5 min", bestFor: "Long hair", avoid: "Top knot or high bun" },
-    { name: "Loose Beach Waves", img: "wavy", reason: "Loose waves from cheekbone down balance heart beautifully", maintenance: "Medium", time: "15 min", bestFor: "Medium to long", avoid: "Volume at crown only" },
+    { name: "Chin Length Bob", pexelsQuery: "women chin length bob haircut", reason: "Adds width at narrow chin to perfectly balance heart shape", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Top heavy styles" },
+    { name: "Side Swept Bangs", pexelsQuery: "women side swept bangs", reason: "Reduces wide forehead — most effective for heart face", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Heavy straight bangs" },
+    { name: "Wavy Long", pexelsQuery: "women long wavy hair", reason: "Waves below jaw add width and balance to pointed chin", maintenance: "Medium", time: "20 min", bestFor: "Wavy hair", avoid: "Huge top volume" },
+    { name: "Curtain Bangs", pexelsQuery: "women curtain bangs hairstyle", reason: "Soft curtain bangs reduce wide forehead subtly", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Thick blunt bangs" },
+    { name: "Low Bun", pexelsQuery: "women low bun hairstyle", reason: "Low bun adds width at jaw to balance forehead", maintenance: "Low", time: "5 min", bestFor: "Long hair", avoid: "Top knot or high bun" },
   ],
   diamond: [
-    { name: "Chin Bob with Volume", img: "bob", reason: "Chin length adds width to narrow chin of diamond face", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Cheek level volume" },
-    { name: "Side Swept Bangs", img: "bangs", reason: "Widens narrow forehead — very effective for diamond", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Center part" },
-    { name: "Layered Long", img: "layered", reason: "Layers at chin level balance prominent cheekbones", maintenance: "Medium", time: "20 min", bestFor: "Medium thick hair", avoid: "Maximum cheek volume" },
-    { name: "Bun with Side Bangs", img: "bun", reason: "Bun shows elegant neckline, bangs add forehead width", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Sleek no-volume bun" },
-    { name: "Wavy Medium", img: "wavy", reason: "Volume at forehead and chin balances wide cheekbones", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Maximum volume at cheeks" },
-    { name: "Curtain Bangs", img: "bangs", reason: "Adds width to narrow forehead of diamond shape", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt bangs" },
-    { name: "Pixie with Volume", img: "pixie", reason: "Volume at crown and sides balances diamond shape", maintenance: "Low", time: "10 min", bestFor: "Fine to medium", avoid: "Flat tight pixie" },
-    { name: "Loose Braids", img: "braid", reason: "Braids add texture at forehead and chin to balance", maintenance: "Low", time: "10 min", bestFor: "Long hair", avoid: "Tight cheek-hugging braids" },
+    { name: "Chin Bob with Volume", pexelsQuery: "women chin bob voluminous hair", reason: "Chin length adds width to narrow chin of diamond face", maintenance: "Medium", time: "15 min", bestFor: "All hair types", avoid: "Cheek level volume" },
+    { name: "Side Swept Bangs", pexelsQuery: "women side swept bangs", reason: "Widens narrow forehead — very effective for diamond", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Center part" },
+    { name: "Wavy Medium", pexelsQuery: "women medium wavy hair", reason: "Volume at forehead and chin balances wide cheekbones", maintenance: "Medium", time: "15 min", bestFor: "Wavy hair", avoid: "Maximum volume at cheeks" },
+    { name: "Curtain Bangs", pexelsQuery: "women curtain bangs hairstyle", reason: "Adds width to narrow forehead of diamond shape", maintenance: "Medium", time: "10 min", bestFor: "All hair types", avoid: "Blunt bangs" },
+    { name: "Pixie with Volume", pexelsQuery: "women pixie cut volume", reason: "Volume at crown and sides balances diamond shape", maintenance: "Low", time: "10 min", bestFor: "Fine to medium", avoid: "Flat tight pixie" },
   ],
 };
 
 // ─── Helper Functions ─────────────────────────────────────────────────────────
-
-// ✅ UPDATED: realImage (Pexels) pehle check karo, fallback Unsplash
-const getHairImage = (imgKey, gender, realImage = null) => {
-  if (realImage) return realImage; // ✅ Pexels real image from backend
-  const isFemale = gender?.toLowerCase() === "female";
-  const img = HAIRSTYLE_IMAGES[imgKey];
-  if (img) return img;
-  return isFemale ? HAIRSTYLE_IMAGES.default_female : HAIRSTYLE_IMAGES.default_male;
-};
-
 const getHairstyles = (faceShape, gender) => {
   const isFemale = gender?.toLowerCase() === "female";
   const db = isFemale ? FEMALE_HAIRSTYLES : MALE_HAIRSTYLES;
@@ -177,20 +147,20 @@ const getHairstyles = (faceShape, gender) => {
 const getFaceShapeTips = (shape, gender) => {
   const isFemale = gender?.toLowerCase() === "female";
   const maleTips = {
-    round: ["Add height on top to make face look longer", "Avoid bowl cuts — they emphasize roundness", "Side parts work better than center parts", "Textured layers on top reduce roundness", "Keep sides tight, volume only on top", "Avoid round curly styles at ear level"],
-    oval: ["Lucky! Almost any hairstyle suits you", "Both short and long styles work great", "You can experiment with fringes freely", "Slick back, quiff, buzz — all look good", "Only avoid extremely wide side volume", "Show off your balanced features confidently"],
-    square: ["Soften strong jawline with layers and waves", "Avoid blunt cuts that emphasize jaw width", "Side swept styles reduce angular sharpness", "Curls and waves are your best friends", "Avoid geometric or boxy haircuts", "Longer top with taper sides works great"],
-    oblong: ["Add width with layers and side volume", "Avoid very long straight hairstyles", "Bangs/fringe can shorten face length", "Curls and waves add great width visually", "Avoid center parts with flat styles", "Side parts with volume at ears works best"],
-    heart: ["Balance wide forehead with jaw-level volume", "Side swept bangs reduce forehead width", "Avoid top-heavy volume styles", "Textured crops with fringe work great", "Keep sides fuller around chin area", "Taper fade with textured top is ideal"],
-    diamond: ["Add volume at forehead and chin area", "Avoid volume specifically at cheekbones", "Side swept styles work great for you", "Chin length cuts balance narrow proportions", "Quiff adds needed forehead width", "Undercut with longer top is perfect"],
+    round: ["Add height on top to make face look longer", "Avoid bowl cuts — they emphasize roundness", "Side parts work better than center parts", "Textured layers on top reduce roundness", "Keep sides tight, volume only on top"],
+    oval: ["Lucky! Almost any hairstyle suits you", "Both short and long styles work great", "You can experiment with fringes freely", "Slick back, quiff, buzz — all look good", "Show off your balanced features confidently"],
+    square: ["Soften strong jawline with layers and waves", "Avoid blunt cuts that emphasize jaw width", "Side swept styles reduce angular sharpness", "Curls and waves are your best friends", "Longer top with taper sides works great"],
+    oblong: ["Add width with layers and side volume", "Avoid very long straight hairstyles", "Bangs/fringe can shorten face length", "Curls and waves add great width visually", "Side parts with volume at ears works best"],
+    heart: ["Balance wide forehead with jaw-level volume", "Side swept bangs reduce forehead width", "Avoid top-heavy volume styles", "Textured crops with fringe work great", "Taper fade with textured top is ideal"],
+    diamond: ["Add volume at forehead and chin area", "Avoid volume specifically at cheekbones", "Side swept styles work great for you", "Chin length cuts balance narrow proportions", "Undercut with longer top is perfect"],
   };
   const femaleTips = {
-    round: ["Long layers below shoulders lengthen face", "Avoid chin-length blunt cuts — they widen", "Side parts create diagonal that slims face", "Curtain bangs frame without widening", "Stay away from high volume at sides", "Sleek straight long hair is your best friend"],
-    oval: ["You can try literally any hairstyle!", "Short pixie to long waves — all work", "Blunt bobs, curtain bangs, curls — all great", "Show off your natural proportions", "Try bold styles other face shapes can't", "Experiment freely — you won the face shape lottery"],
-    square: ["Soft waves and curls soften angular jaw", "Avoid blunt geometric cuts — they sharpen jaw", "Side swept bangs break strong symmetry", "Layered cuts at face level soften features", "Long hair past shoulders frames jaw softly", "Loose braids add elegant softness"],
-    oblong: ["Blunt bob adds width and reduces length", "Bangs are your best tool — always use them", "Avoid extra long straight styles", "Volume at sides is your friend", "Short to medium length works better than long", "Side braids add horizontal width"],
-    heart: ["Volume at chin level balances wide forehead", "Side swept or curtain bangs reduce forehead", "Chin length or below is your sweet spot", "Avoid top-heavy styles and high volume", "Layered lob below chin is perfect", "Low buns add width at jaw level"],
-    diamond: ["Add volume at forehead AND chin simultaneously", "Side swept bangs widen narrow forehead", "Chin bob is your most flattering cut", "Avoid maximum volume only at cheekbones", "Curtain bangs frame your face beautifully", "Layered styles at chin level are ideal"],
+    round: ["Long layers below shoulders lengthen face", "Avoid chin-length blunt cuts — they widen", "Side parts create diagonal that slims face", "Curtain bangs frame without widening", "Sleek straight long hair is your best friend"],
+    oval: ["You can try literally any hairstyle!", "Short pixie to long waves — all work", "Blunt bobs, curtain bangs, curls — all great", "Show off your natural proportions", "Experiment freely — you won the face shape lottery"],
+    square: ["Soft waves and curls soften angular jaw", "Avoid blunt geometric cuts — they sharpen jaw", "Side swept bangs break strong symmetry", "Layered cuts at face level soften features", "Loose braids add elegant softness"],
+    oblong: ["Blunt bob adds width and reduces length", "Bangs are your best tool — always use them", "Avoid extra long straight styles", "Volume at sides is your friend", "Side braids add horizontal width"],
+    heart: ["Volume at chin level balances wide forehead", "Side swept or curtain bangs reduce forehead", "Chin length or below is your sweet spot", "Avoid top-heavy styles and high volume", "Low buns add width at jaw level"],
+    diamond: ["Add volume at forehead AND chin simultaneously", "Side swept bangs widen narrow forehead", "Chin bob is your most flattering cut", "Curtain bangs frame your face beautifully", "Layered styles at chin level are ideal"],
   };
   const tips = isFemale ? femaleTips : maleTips;
   return tips[shape?.toLowerCase()] || tips["oval"];
@@ -214,45 +184,15 @@ const getFemaleProducts = () => [
 
 const getMaintenanceTips = (level, gender) => {
   const isFemale = gender?.toLowerCase() === "female";
-  if (level === "Low") return isFemale ? [
-    "Wash 2-3 times a week with mild shampoo",
-    "Air dry to avoid heat damage",
-    "Use leave-in conditioner for moisture",
-    "Trim every 8-10 weeks to maintain shape",
-    "Light serum on damp hair for shine",
-  ] : [
-    "Wash 2-3 times a week",
-    "Air dry — no heat styling needed",
-    "Trim every 6-8 weeks",
-    "Light wax or gel to set if needed",
-    "Oil once a week for healthy scalp",
-  ];
-  if (level === "Medium") return isFemale ? [
-    "Wash 3-4 times a week",
-    "Always condition after shampooing",
-    "Blow dry with round brush for shape",
-    "Trim every 6-8 weeks",
-    "Use heat protectant before blow drying",
-  ] : [
-    "Wash 3-4 times a week",
-    "Use conditioner on ends",
-    "Blow dry for shape and volume",
-    "Trim every 4-6 weeks",
-    "Medium hold product to style",
-  ];
-  return isFemale ? [
-    "Wash every other day or daily",
-    "Deep condition once a week",
-    "Always use heat protectant spray",
-    "Blow dry + iron or curler to finish",
-    "Trim every 4-6 weeks for shape",
-  ] : [
-    "Wash daily or every other day",
-    "Use heat protectant before styling",
-    "Blow dry + product to set",
-    "Trim every 3-4 weeks for shape",
-    "Hold spray or pomade to finish",
-  ];
+  if (level === "Low") return isFemale
+    ? ["Wash 2-3 times a week with mild shampoo", "Air dry to avoid heat damage", "Use leave-in conditioner for moisture", "Trim every 8-10 weeks to maintain shape", "Light serum on damp hair for shine"]
+    : ["Wash 2-3 times a week", "Air dry — no heat styling needed", "Trim every 6-8 weeks", "Light wax or gel to set if needed", "Oil once a week for healthy scalp"];
+  if (level === "Medium") return isFemale
+    ? ["Wash 3-4 times a week", "Always condition after shampooing", "Blow dry with round brush for shape", "Trim every 6-8 weeks", "Use heat protectant before blow drying"]
+    : ["Wash 3-4 times a week", "Use conditioner on ends", "Blow dry for shape and volume", "Trim every 4-6 weeks", "Medium hold product to style"];
+  return isFemale
+    ? ["Wash every other day or daily", "Deep condition once a week", "Always use heat protectant spray", "Blow dry + iron or curler to finish", "Trim every 4-6 weeks for shape"]
+    : ["Wash daily or every other day", "Use heat protectant before styling", "Blow dry + product to set", "Trim every 3-4 weeks for shape", "Hold spray or pomade to finish"];
 };
 
 const getSkinScoreColor = (score) => score >= 70 ? "#51CF66" : score >= 50 ? "#FFD93D" : "#FF6B6B";
@@ -271,6 +211,13 @@ export default function FaceAnalysis() {
   const [expandedCard, setExpandedCard] = useState(null);
   const [selectedGender, setSelectedGender] = useState(null);
   const [mode, setMode] = useState("upload");
+  const [hairstyleImages, setHairstyleImages] = useState({}); // Pexels fetched images
+
+  // ─── Real-time browser camera refs ──────────────────────────────────────────
+  const browserVideoRef = useRef(null);
+  const browserStreamRef = useRef(null);
+  const [browserCamActive, setBrowserCamActive] = useState(false);
+  const [browserCamError, setBrowserCamError] = useState("");
 
   const {
     videoRef, canvasRef,
@@ -279,11 +226,81 @@ export default function FaceAnalysis() {
     startCamera, stopCamera, captureFrame, getFaceAnalysis,
   } = useMediaPipeFace();
 
+  // ─── Browser camera start (getUserMedia) ────────────────────────────────────
+  const startBrowserCamera = useCallback(async () => {
+    setBrowserCamError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      browserStreamRef.current = stream;
+      if (browserVideoRef.current) {
+        browserVideoRef.current.srcObject = stream;
+        await browserVideoRef.current.play();
+      }
+      setBrowserCamActive(true);
+    } catch (err) {
+      setBrowserCamError("Camera permission denied. Please allow camera access.");
+      console.error("getUserMedia error:", err);
+    }
+  }, []);
+
+  const stopBrowserCamera = useCallback(() => {
+    if (browserStreamRef.current) {
+      browserStreamRef.current.getTracks().forEach(t => t.stop());
+      browserStreamRef.current = null;
+    }
+    setBrowserCamActive(false);
+  }, []);
+
+  // ─── Capture frame from browser camera ──────────────────────────────────────
+  const captureBrowserFrame = useCallback(() => {
+    const video = browserVideoRef.current;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    const base64 = dataUrl.split(",")[1];
+    stopBrowserCamera();
+    setImageBase64(base64);
+    setImagePreview(dataUrl);
+    setMode("captured");
+  }, [stopBrowserCamera]);
+
+  // ─── Detect if running in Capacitor (native) or browser ─────────────────────
+  const isNative = typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.();
+
+  // ─── Handle Live Camera Mode ─────────────────────────────────────────────────
+  const handleLiveMode = async () => {
+    setMode("live");
+    setResult(null);
+    setImagePreview(null);
+    setImageBase64(null);
+    setError("");
+    setBrowserCamError("");
+
+    if (isNative) {
+      // Mobile: use MediaPipe + Capacitor camera
+      await startCamera();
+    } else {
+      // Browser: use getUserMedia directly
+      await startBrowserCamera();
+      // Also try MediaPipe for face detection overlay
+      try { await startCamera(); } catch (_) {}
+    }
+  };
+
+  // ─── Handle Upload/Gallery/Camera ────────────────────────────────────────────
   const handleCapture = async (source) => {
     setError("");
     setSelectedGender(null);
     setResult(null);
     stopCamera();
+    stopBrowserCamera();
     setMode("upload");
     const { base64, dataUrl, error: err } = await getPhoto(source);
     if (err || !base64) return;
@@ -291,25 +308,37 @@ export default function FaceAnalysis() {
     setImagePreview(dataUrl);
   };
 
-  const handleLiveMode = async () => {
-    setMode("live");
-    setResult(null);
-    setImagePreview(null);
-    setImageBase64(null);
-    setError("");
-    await startCamera();
-  };
-
+  // ─── Capture from live camera ────────────────────────────────────────────────
   const handleCaptureLive = () => {
-    const frame = captureFrame();
-    if (frame) {
-      setImageBase64(frame.base64);
-      setImagePreview(frame.dataUrl);
+    if (isNative) {
+      // Native: MediaPipe captureFrame
+      const frame = captureFrame();
+      if (frame) {
+        setImageBase64(frame.base64);
+        setImagePreview(frame.dataUrl);
+        stopCamera();
+        setMode("captured");
+      }
+    } else {
+      // Browser: capture from getUserMedia video
+      captureBrowserFrame();
       stopCamera();
-      setMode("captured");
     }
   };
 
+  // ─── Pexels images load karo results ke baad ────────────────────────────────
+  const loadPexelsImages = async (hairstyles) => {
+    const imgs = {};
+    await Promise.all(
+      hairstyles.map(async (style) => {
+        const url = await getOrFetchPexels(style.pexelsQuery);
+        if (url) imgs[style.name] = url;
+      })
+    );
+    setHairstyleImages(imgs);
+  };
+
+  // ─── Analyze ─────────────────────────────────────────────────────────────────
   const analyze = async () => {
     if (!imageBase64) return;
     if (!selectedGender) {
@@ -319,6 +348,7 @@ export default function FaceAnalysis() {
     setLoading(true);
     setError("");
     setResult(null);
+    setHairstyleImages({});
 
     try {
       const mpAnalysis = getFaceAnalysis();
@@ -338,6 +368,11 @@ export default function FaceAnalysis() {
       }
 
       setResult(data);
+
+      // ✅ Pexels se images load karo result ke baad
+      const styles = getHairstyles(data.faceShape, selectedGender);
+      loadPexelsImages(styles);
+
       const prev = parseInt(localStorage.getItem("glowup_face_count") || "0");
       localStorage.setItem("glowup_face_count", prev + 1);
     } catch (err) {
@@ -349,30 +384,35 @@ export default function FaceAnalysis() {
   const isFemale = selectedGender === "Female" ||
     result?.detectedGender?.toLowerCase() === "female";
 
-  // ✅ Hairstyles: backend se aaye topHairstyles use karo (realImage ke saath)
-  // Agar nahi aaye toh local database fallback
   const getDisplayHairstyles = () => {
     if (result?.topHairstyles && result.topHairstyles.length > 0) {
-      // Backend se aaye AI hairstyles (Pexels images attached)
       return result.topHairstyles.map(style => ({
         name: style.name,
-        img: style.name?.toLowerCase().split(" ")[0] || "default",
+        pexelsQuery: style.name + " hairstyle",
         reason: style.reason,
         maintenance: style.maintenance || "Medium",
         time: "10-15 min",
         bestFor: "All hair types",
         avoid: "Styles that add unwanted volume",
-        realImage: style.realImage || null, // ✅ Pexels image
       }));
     }
-    // Local fallback
     return getHairstyles(result?.faceShape, isFemale ? "female" : "male");
+  };
+
+  // Image URL: Pexels fetched > fallback Unsplash
+  const getStyleImage = (styleName, gender) => {
+    if (hairstyleImages[styleName]) return hairstyleImages[styleName];
+    return gender === "female" ? FALLBACK_IMAGES.female : FALLBACK_IMAGES.male;
   };
 
   const RESULT_TABS = [
     { id: "hair", label: isFemale ? "💇‍♀️ Hair" : "💇‍♂️ Hair" },
     { id: "style", label: "🎨 Style" },
   ];
+
+  // ─── Is live camera ready? ────────────────────────────────────────────────────
+  const liveCamReady = isNative ? (isReady && faceDetected) : browserCamActive;
+  const showLiveOverlay = isNative; // MediaPipe overlay only on native
 
   return (
     <div style={{ padding: "0 16px 100px" }} className="tab-content">
@@ -381,42 +421,67 @@ export default function FaceAnalysis() {
       {/* Mode Toggle */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <div
-          onClick={() => { setMode("upload"); stopCamera(); setResult(null); }}
+          onClick={() => { setMode("upload"); stopCamera(); stopBrowserCamera(); setResult(null); }}
           style={{
-            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer",
-            textAlign: "center",
+            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer", textAlign: "center",
             background: mode === "upload" || mode === "captured" ? "var(--grad1)" : "var(--card)",
             border: `1px solid ${mode === "upload" || mode === "captured" ? "transparent" : "var(--border)"}`,
             fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
-            color: mode === "upload" || mode === "captured" ? "#fff" : "var(--muted)",
-            transition: "all 0.2s",
+            color: mode === "upload" || mode === "captured" ? "#fff" : "var(--muted)", transition: "all 0.2s",
           }}>
           📷 Upload Photo
         </div>
         <div
           onClick={handleLiveMode}
           style={{
-            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer",
-            textAlign: "center",
+            flex: 1, padding: "11px", borderRadius: 14, cursor: "pointer", textAlign: "center",
             background: mode === "live" ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
             border: `1px solid ${mode === "live" ? "transparent" : "var(--border)"}`,
             fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700,
-            color: mode === "live" ? "#fff" : "var(--muted)",
-            transition: "all 0.2s",
+            color: mode === "live" ? "#fff" : "var(--muted)", transition: "all 0.2s",
           }}>
           🔴 Live Camera
         </div>
       </div>
 
-      {/* LIVE MODE */}
+      {/* ─── LIVE CAMERA MODE ──────────────────────────────────────────────────── */}
       {mode === "live" && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", background: "#000", minHeight: 280 }}>
-            <video ref={videoRef} autoPlay playsInline muted
-              style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }} />
-            <canvas ref={canvasRef}
-              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
-            {mpLoading && (
+
+            {/* Browser camera (getUserMedia) */}
+            {!isNative && (
+              <video
+                ref={browserVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }}
+              />
+            )}
+
+            {/* Native/MediaPipe camera */}
+            {isNative && (
+              <>
+                <video ref={videoRef} autoPlay playsInline muted
+                  style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }} />
+                <canvas ref={canvasRef}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
+              </>
+            )}
+
+            {/* Loading state */}
+            {!browserCamActive && !isNative && !browserCamError && (
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                <div style={{ fontSize: 32 }}>📷</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>Camera shuru ho rahi hai...</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {[0,1,2].map(i => <div key={i} className="loading-dot" style={{ animationDelay: `${i*0.2}s` }} />)}
+                </div>
+              </div>
+            )}
+
+            {mpLoading && isNative && (
               <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 <div style={{ fontSize: 32 }}>🔍</div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>MediaPipe Loading...</div>
@@ -425,17 +490,22 @@ export default function FaceAnalysis() {
                 </div>
               </div>
             )}
-            {isReady && (
-              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 5 }}>
+
+            {/* Status badges */}
+            {browserCamActive && !isNative && (
+              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                ✅ Camera Active
+              </div>
+            )}
+
+            {isReady && isNative && (
+              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
                 {faceDetected ? "✅ Face Detected" : "❌ No Face — Move closer"}
               </div>
             )}
-            {isReady && (
-              <div style={{ position: "absolute", top: 12, right: 12, padding: "5px 10px", borderRadius: 20, background: "rgba(77,150,255,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#fff" }}>
-                MediaPipe AI
-              </div>
-            )}
-            {faceDetected && liveFaceShape && (
+
+            {/* MediaPipe live face shape (native only) */}
+            {showLiveOverlay && faceDetected && liveFaceShape && (
               <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "10px 14px", borderRadius: 14, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Live Detection</div>
@@ -447,18 +517,31 @@ export default function FaceAnalysis() {
                 </div>
               </div>
             )}
+
+            {/* Browser cam: simple instruction */}
+            {browserCamActive && !isNative && (
+              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "8px 14px", borderRadius: 12, background: "rgba(0,0,0,0.7)", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
+                😊 Apna chehra frame mein rakho aur capture karo
+              </div>
+            )}
           </div>
-          {isReady && faceDetected && (
-            <button onClick={handleCaptureLive} style={{ width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16, background: "linear-gradient(135deg,#51CF66,#20C997)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(81,207,102,0.35)" }}>
+
+          {/* Capture Button */}
+          {liveCamReady && (
+            <button
+              onClick={handleCaptureLive}
+              style={{ width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16, background: "linear-gradient(135deg,#51CF66,#20C997)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(81,207,102,0.35)" }}>
               📸 Capture & Continue
             </button>
           )}
-          {!isReady && !mpLoading && (
-            <div style={{ marginTop: 10, padding: "12px 16px", background: "rgba(77,150,255,0.08)", border: "1px solid rgba(77,150,255,0.2)", borderRadius: 14, fontFamily: "var(--font-body)", fontSize: 13, color: "#4D96FF", textAlign: "center" }}>
-              💡 Camera permission allow karo
+
+          {/* Errors */}
+          {browserCamError && (
+            <div style={{ marginTop: 10, padding: "12px 16px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 14, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
+              ⚠️ {browserCamError}
             </div>
           )}
-          {mpError && (
+          {mpError && isNative && (
             <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
               ⚠️ {mpError}
             </div>
@@ -466,7 +549,7 @@ export default function FaceAnalysis() {
         </div>
       )}
 
-      {/* UPLOAD MODE */}
+      {/* ─── UPLOAD MODE ──────────────────────────────────────────────────────── */}
       {(mode === "upload" || mode === "captured") && (
         <>
           {mode === "upload" && (
@@ -502,7 +585,7 @@ export default function FaceAnalysis() {
         <div>
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 8, textAlign: "center" }}>
-              Select your gender for accurate results:
+              Accurate results ke liye gender select karo:
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               {["Male", "Female"].map(g => (
@@ -512,8 +595,7 @@ export default function FaceAnalysis() {
                     background: selectedGender === g ? (g === "Female" ? "rgba(255,107,107,0.15)" : "rgba(77,150,255,0.15)") : "var(--card)",
                     border: `2px solid ${selectedGender === g ? (g === "Female" ? "#FF6B6B" : "#4D96FF") : "var(--border)"}`,
                     fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700,
-                    color: selectedGender === g ? (g === "Female" ? "#FF6B6B" : "#4D96FF") : "var(--muted)",
-                    transition: "all 0.2s",
+                    color: selectedGender === g ? (g === "Female" ? "#FF6B6B" : "#4D96FF") : "var(--muted)", transition: "all 0.2s",
                   }}>
                   {g === "Female" ? "👩 Female" : "👨 Male"}
                 </div>
@@ -526,13 +608,12 @@ export default function FaceAnalysis() {
 
       {loading && (
         <Card style={{ marginTop: 16, textAlign: "center" }}>
-          <div style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 14, marginBottom: 8 }}>
-            {t.analyzing}
-          </div>
+          <div style={{ fontFamily: "var(--font-body)", color: "var(--muted)", fontSize: 14, marginBottom: 8 }}>{t.analyzing}</div>
           <LoadingDots />
         </Card>
       )}
 
+      {/* ─── RESULTS ────────────────────────────────────────────────────────────── */}
       {result && (
         <div style={{ marginTop: 16 }}>
 
@@ -594,33 +675,37 @@ export default function FaceAnalysis() {
                 </div>
                 <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)" }}>
                   {getDisplayHairstyles().length} personalized cuts — tap any to expand
-                  {result?.topHairstyles?.length > 0 && (
-                    <span style={{ color: "#51CF66", marginLeft: 6 }}>✅ AI recommended</span>
-                  )}
+                  <span style={{ color: "#51CF66", marginLeft: 6 }}>✅ Pexels real photos</span>
                 </div>
               </div>
 
-              {/* ✅ getDisplayHairstyles() use karo — Pexels images ke saath */}
               {getDisplayHairstyles().map((style, i) => {
                 const maintenanceColor = style.maintenance === "Low" ? "#51CF66" : style.maintenance === "Medium" ? "#FFD93D" : "#FF6B6B";
                 const isExpanded = expandedCard === i;
+                const imgSrc = getStyleImage(style.name, isFemale ? "female" : "male");
+                const isPexels = !!hairstyleImages[style.name];
                 return (
                   <div key={i} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 20, overflow: "hidden", marginBottom: 14 }}>
                     <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
                       <img
-                        // ✅ realImage (Pexels) pehle, fallback Unsplash
-                        src={getHairImage(style.img, isFemale ? "female" : "male", style.realImage)}
+                        src={imgSrc}
                         alt={style.name}
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        onError={e => { e.target.src = isFemale ? HAIRSTYLE_IMAGES.default_female : HAIRSTYLE_IMAGES.default_male; }}
+                        onError={e => { e.target.src = isFemale ? FALLBACK_IMAGES.female : FALLBACK_IMAGES.male; }}
                       />
                       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 50%)" }} />
                       <div style={{ position: "absolute", top: 12, left: 12, width: 32, height: 32, borderRadius: 10, background: isFemale ? "linear-gradient(135deg,#FF6B6B,#845EF7)" : "linear-gradient(135deg,#4D96FF,#845EF7)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 800, color: "#fff" }}>{i + 1}</div>
                       <div style={{ position: "absolute", top: 12, right: 12, padding: "4px 10px", borderRadius: 20, background: `${maintenanceColor}33`, border: `1px solid ${maintenanceColor}`, fontFamily: "var(--font-body)", fontSize: 11, fontWeight: 700, color: maintenanceColor }}>{style.maintenance} care</div>
-                      {/* ✅ Pexels badge */}
-                      {style.realImage && (
+                      {/* Pexels badge */}
+                      {isPexels && (
                         <div style={{ position: "absolute", top: 44, right: 12, padding: "3px 8px", borderRadius: 20, background: "rgba(81,207,102,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#fff" }}>
-                          📸 Real Photo
+                          📸 Pexels Live
+                        </div>
+                      )}
+                      {/* Loading indicator for images still fetching */}
+                      {!isPexels && Object.keys(hairstyleImages).length < getDisplayHairstyles().length && (
+                        <div style={{ position: "absolute", top: 44, right: 12, padding: "3px 8px", borderRadius: 20, background: "rgba(255,211,61,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#000" }}>
+                          ⏳ Loading...
                         </div>
                       )}
                       <div style={{ position: "absolute", bottom: 12, left: 14, right: 14 }}>
@@ -675,15 +760,12 @@ export default function FaceAnalysis() {
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
                   📚 {result.faceShape} face — {isFemale ? "women's" : "men's"} guide
                 </div>
-                {getFaceShapeTips(result.faceShape, isFemale ? "female" : "male").map((tip, i) => {
-                  const allTips = getFaceShapeTips(result.faceShape, isFemale ? "female" : "male");
-                  return (
-                    <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: i < allTips.length - 1 ? "1px solid var(--border)" : "none" }}>
-                      <div style={{ width: 22, height: 22, borderRadius: 6, background: isFemale ? "rgba(255,107,107,0.15)" : "rgba(77,150,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: isFemale ? "#FF6B6B" : "#4D96FF", flexShrink: 0 }}>{i + 1}</div>
-                      <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)", paddingTop: 2, lineHeight: 1.5 }}>{tip}</div>
-                    </div>
-                  );
-                })}
+                {getFaceShapeTips(result.faceShape, isFemale ? "female" : "male").map((tip, i, arr) => (
+                  <div key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: isFemale ? "rgba(255,107,107,0.15)" : "rgba(77,150,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: isFemale ? "#FF6B6B" : "#4D96FF", flexShrink: 0 }}>{i + 1}</div>
+                    <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "var(--text)", paddingTop: 2, lineHeight: 1.5 }}>{tip}</div>
+                  </div>
+                ))}
               </div>
 
               {/* Salon Tips */}
@@ -728,7 +810,6 @@ export default function FaceAnalysis() {
               </div>
             </div>
           )}
-
         </div>
       )}
     </div>
