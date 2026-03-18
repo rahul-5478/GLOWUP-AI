@@ -275,31 +275,15 @@ export default function FaceAnalysis() {
     startCamera, stopCamera, captureFrame, getFaceAnalysis,
   } = useMediaPipeFace();
 
-  // ─── Browser camera start (getUserMedia) ────────────────────────────────────
+  // ─── Browser camera — uses MediaPipe's videoRef directly ───────────────────
   const startBrowserCamera = useCallback(async () => {
     setBrowserCamError("");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      browserStreamRef.current = stream;
-      if (browserVideoRef.current) {
-        browserVideoRef.current.srcObject = stream;
-        await browserVideoRef.current.play();
-      }
-      setBrowserCamActive(true);
-    } catch (err) {
-      setBrowserCamError("Camera permission denied. Please allow camera access.");
-      console.error("getUserMedia error:", err);
-    }
+    // Just trigger MediaPipe startCamera — it handles getUserMedia internally
+    // This ensures MediaPipe can detect face shape on the same video element
+    setBrowserCamActive(true);
   }, []);
 
   const stopBrowserCamera = useCallback(() => {
-    if (browserStreamRef.current) {
-      browserStreamRef.current.getTracks().forEach(t => t.stop());
-      browserStreamRef.current = null;
-    }
     setBrowserCamActive(false);
   }, []);
 
@@ -335,16 +319,12 @@ export default function FaceAnalysis() {
     setCapturedJawline(null);
     setSelectedFaceShape(null);
     setShowFaceShapePicker(false);
+    setBrowserCamActive(false);
 
-    if (isNative) {
-      // Mobile: use MediaPipe + Capacitor camera
-      await startCamera();
-    } else {
-      // Browser: use getUserMedia directly
-      await startBrowserCamera();
-      // Also try MediaPipe for face detection overlay
-      try { await startCamera(); } catch (_) {}
-    }
+    // Always use MediaPipe camera — works on both browser and native
+    // MediaPipe handles getUserMedia internally and detects face shape
+    await startCamera();
+    setBrowserCamActive(true);
   };
 
   // ─── Capture from live camera ────────────────────────────────────────────────
@@ -537,109 +517,86 @@ export default function FaceAnalysis() {
         <div style={{ marginBottom: 14 }}>
           <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", background: "#000", minHeight: 280 }}>
 
-            {/* Browser camera (getUserMedia) */}
-            {!isNative && (
-              <video
-                ref={browserVideoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }}
-              />
-            )}
+            {/* MediaPipe camera — works for both browser and native */}
+            <video ref={videoRef} autoPlay playsInline muted
+              style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
+            <canvas ref={canvasRef}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
 
-            {/* Native/MediaPipe camera */}
-            {isNative && (
-              <>
-                <video ref={videoRef} autoPlay playsInline muted
-                  style={{ width: "100%", maxHeight: 320, objectFit: "cover", display: "block" }} />
-                <canvas ref={canvasRef}
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
-              </>
-            )}
-
-            {/* Loading state */}
-            {!browserCamActive && !isNative && !browserCamError && (
+            {/* MediaPipe Loading */}
+            {mpLoading && (
               <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                <div style={{ fontSize: 32 }}>📷</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>Camera shuru ho rahi hai...</div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {[0,1,2].map(i => <div key={i} className="loading-dot" style={{ animationDelay: `${i*0.2}s` }} />)}
-                </div>
-              </div>
-            )}
-
-            {mpLoading && isNative && (
-              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
                 <div style={{ fontSize: 32 }}>🔍</div>
-                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>MediaPipe Loading...</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 14, color: "#fff", fontWeight: 700 }}>Starting MediaPipe AI...</div>
+                <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Detecting face shape in real-time</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {[0,1,2].map(i => <div key={i} className="loading-dot" style={{ animationDelay: `${i*0.2}s` }} />)}
                 </div>
               </div>
             )}
 
-            {/* Status badges */}
-            {browserCamActive && !isNative && (
-              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-                ✅ Camera Active
-              </div>
-            )}
-
-            {isReady && isNative && (
+            {/* Face detection status */}
+            {isReady && (
               <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
                 {faceDetected ? "✅ Face Detected" : "❌ No Face — Move closer"}
               </div>
             )}
 
-            {/* MediaPipe live face shape (native only) */}
-            {showLiveOverlay && faceDetected && liveFaceShape && (
-              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "10px 14px", borderRadius: 14, background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            {/* MediaPipe AI badge */}
+            {isReady && (
+              <div style={{ position: "absolute", top: 12, right: 12, padding: "5px 10px", borderRadius: 20, background: "rgba(77,150,255,0.85)", fontFamily: "var(--font-body)", fontSize: 10, fontWeight: 700, color: "#fff" }}>
+                MediaPipe AI
+              </div>
+            )}
+
+            {/* Live face shape overlay */}
+            {faceDetected && liveFaceShape && (
+              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "12px 16px", borderRadius: 16, background: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Live Detection</div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 16, color: "#fff", fontWeight: 800 }}>📐 {liveFaceShape?.charAt(0).toUpperCase() + liveFaceShape?.slice(1)} Face</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>MediaPipe Detected</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, color: "#51CF66", fontWeight: 800 }}>
+                    📐 {liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1)} Face
+                  </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.6)" }}>Jawline</div>
-                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#51CF66", fontWeight: 700 }}>{liveJawline}</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>Jawline</div>
+                  <div style={{ fontFamily: "var(--font-body)", fontSize: 13, color: "#4D96FF", fontWeight: 700 }}>{liveJawline}</div>
                 </div>
               </div>
             )}
 
-            {/* Browser cam: show live face shape */}
-            {browserCamActive && !isNative && (
-              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12 }}>
-                {liveFaceShape ? (
-                  <div style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(81,207,102,0.9)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#fff", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    ✅ {liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1)} Face Detected — Ready to capture!
-                  </div>
-                ) : (
-                  <div style={{ padding: "8px 14px", borderRadius: 12, background: "rgba(0,0,0,0.7)", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
-                    😊 Keep your face in the frame — detecting shape...
-                  </div>
-                )}
+            {/* Instruction when no face detected */}
+            {isReady && !faceDetected && (
+              <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, padding: "8px 14px", borderRadius: 12, background: "rgba(0,0,0,0.7)", fontFamily: "var(--font-body)", fontSize: 12, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
+                😊 Keep your face in the frame — looking for face shape...
               </div>
             )}
           </div>
 
-          {/* Capture Button */}
-          {liveCamReady && (
+          {/* Capture Button — show when face is detected */}
+          {isReady && (
             <button
               onClick={handleCaptureLive}
-              style={{ width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16, background: "linear-gradient(135deg,#51CF66,#20C997)", color: "#fff", fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700, cursor: "pointer", boxShadow: "0 8px 24px rgba(81,207,102,0.35)" }}>
-              📸 Capture & Continue
+              disabled={!faceDetected}
+              style={{
+                width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16,
+                background: faceDetected ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
+                color: faceDetected ? "#fff" : "var(--muted)",
+                fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700,
+                cursor: faceDetected ? "pointer" : "not-allowed",
+                boxShadow: faceDetected ? "0 8px 24px rgba(81,207,102,0.35)" : "none",
+                transition: "all 0.3s",
+              }}>
+              {faceDetected
+                ? `📸 Capture ${liveFaceShape ? liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1) : ""} Face & Continue`
+                : "😊 Waiting for face detection..."}
             </button>
           )}
 
           {/* Errors */}
-          {browserCamError && (
+          {(mpError || browserCamError) && (
             <div style={{ marginTop: 10, padding: "12px 16px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 14, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
-              ⚠️ {browserCamError}
-            </div>
-          )}
-          {mpError && isNative && (
-            <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,107,107,0.1)", border: "1px solid rgba(255,107,107,0.3)", borderRadius: 12, fontFamily: "var(--font-body)", fontSize: 13, color: "#FF6B6B", textAlign: "center" }}>
-              ⚠️ {mpError}
+              ⚠️ {mpError || browserCamError}
             </div>
           )}
         </div>
