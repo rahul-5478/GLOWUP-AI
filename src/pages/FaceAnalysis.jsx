@@ -329,36 +329,21 @@ export default function FaceAnalysis() {
 
   // ─── Capture from live camera ────────────────────────────────────────────────
   const handleCaptureLive = () => {
-    if (isNative) {
-      // Save face shape BEFORE stopping camera
-      const mpData = getFaceAnalysis();
-      if (mpData?.faceShape) {
-        setCapturedFaceShape(mpData.faceShape);
-        setCapturedJawline(mpData.jawlineType);
-        console.log("✅ Face shape saved:", mpData.faceShape);
-      }
-      const frame = captureFrame();
-      if (frame) {
-        setImageBase64(frame.base64);
-        setImagePreview(frame.dataUrl);
-        stopCamera();
-        setMode("captured");
-      }
-    } else {
-      // Browser: save face shape from live state BEFORE capture
-      const mpData = getFaceAnalysis();
-      if (mpData?.faceShape) {
-        setCapturedFaceShape(mpData.faceShape);
-        setCapturedJawline(mpData.jawlineType);
-        console.log("✅ Face shape from getFaceAnalysis:", mpData.faceShape);
-      } else if (liveFaceShape) {
-        setCapturedFaceShape(liveFaceShape);
-        setCapturedJawline(liveJawline);
-        console.log("✅ Face shape from live state:", liveFaceShape);
-      }
-      captureBrowserFrame();
-      stopCamera();
+    // Save face shape from MediaPipe BEFORE stopping camera
+    const mpData = getFaceAnalysis();
+    if (mpData?.faceShape) {
+      setCapturedFaceShape(mpData.faceShape);
+      setCapturedJawline(mpData.jawlineType);
+      console.log("✅ Face shape saved:", mpData.faceShape);
+    } else if (liveFaceShape) {
+      setCapturedFaceShape(liveFaceShape);
+      setCapturedJawline(liveJawline || "Defined");
+      console.log("✅ Face shape from live state:", liveFaceShape);
     }
+    // Capture from MediaPipe video element
+    captureBrowserFrame();
+    stopCamera();
+    stopBrowserCamera();
   };
 
   // ─── Pexels images load karo results ke baad ────────────────────────────────
@@ -573,23 +558,24 @@ export default function FaceAnalysis() {
             )}
           </div>
 
-          {/* Capture Button — show when face is detected */}
-          {isReady && (
+          {/* Capture Button — always show in live mode */}
+          {mode === "live" && (
             <button
               onClick={handleCaptureLive}
-              disabled={!faceDetected}
               style={{
                 width: "100%", marginTop: 10, padding: "14px", border: "none", borderRadius: 16,
-                background: faceDetected ? "linear-gradient(135deg,#51CF66,#20C997)" : "var(--card)",
-                color: faceDetected ? "#fff" : "var(--muted)",
+                background: faceDetected
+                  ? "linear-gradient(135deg,#51CF66,#20C997)"
+                  : "linear-gradient(135deg,#845EF7,#4D96FF)",
+                color: "#fff",
                 fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 700,
-                cursor: faceDetected ? "pointer" : "not-allowed",
-                boxShadow: faceDetected ? "0 8px 24px rgba(81,207,102,0.35)" : "none",
+                cursor: "pointer",
+                boxShadow: "0 8px 24px rgba(81,207,102,0.3)",
                 transition: "all 0.3s",
               }}>
-              {faceDetected
-                ? `📸 Capture ${liveFaceShape ? liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1) : ""} Face & Continue`
-                : "😊 Waiting for face detection..."}
+              {faceDetected && liveFaceShape
+                ? `📸 Capture ${liveFaceShape.charAt(0).toUpperCase() + liveFaceShape.slice(1)} Face & Continue`
+                : "📸 Capture Photo & Continue"}
             </button>
           )}
 
