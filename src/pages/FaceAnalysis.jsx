@@ -414,7 +414,7 @@ export default function FaceAnalysis() {
         if (!selectedFaceShape) {
           setLoading(false);
           setShowFaceShapePicker(true);
-          setError("Please use Live Camera so MediaPipe can detect your face shape automatically.");
+          setError("Face shape not detected automatically. Please select your face shape below to continue.");
           return;
         }
         mpAnalysis = { faceShape: selectedFaceShape, jawlineType: "Defined" };
@@ -677,20 +677,50 @@ export default function FaceAnalysis() {
 
       <ErrorMessage message={error} />
 
-      {/* Camera required message — shown when MediaPipe fails */}
+      {/* Manual Face Shape Picker — shown when MediaPipe cannot detect */}
       {showFaceShapePicker && imagePreview && (
-        <div style={{ background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)", borderRadius: 18, padding: 16, marginBottom: 14, textAlign: "center" }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📷</div>
-          <div style={{ fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 700, color: "#FF6B6B", marginBottom: 6 }}>
-            Please use Live Camera
+        <div style={{ background: "var(--card)", border: "1px solid rgba(77,150,255,0.3)", borderRadius: 18, padding: 16, marginBottom: 14 }}>
+          <div style={{ fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+            📐 Select Your Face Shape
           </div>
           <div style={{ fontFamily: "var(--font-body)", fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
-            MediaPipe AI needs live camera to detect your face shape accurately
+            MediaPipe could not detect automatically — select manually and Gemini AI will recommend the best haircuts
           </div>
-          <div onClick={() => { setShowFaceShapePicker(false); handleLiveMode(); }}
-            style={{ display: "inline-block", padding: "10px 24px", borderRadius: 14, background: "linear-gradient(135deg,#51CF66,#20C997)", fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
-            🔴 Open Live Camera
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {[
+              { name: "Oval", emoji: "🥚" },
+              { name: "Round", emoji: "⭕" },
+              { name: "Square", emoji: "🟦" },
+              { name: "Heart", emoji: "❤️" },
+              { name: "Oblong", emoji: "📏" },
+              { name: "Diamond", emoji: "💎" },
+            ].map(({ name, emoji }) => (
+              <div key={name}
+                onClick={() => {
+                  setSelectedFaceShape(name.toLowerCase());
+                  setCapturedFaceShape(name.toLowerCase());
+                  setCapturedJawline("defined");
+                  setShowFaceShapePicker(false);
+                  setError("");
+                }}
+                style={{
+                  padding: "10px 16px", borderRadius: 20, cursor: "pointer",
+                  background: selectedFaceShape === name.toLowerCase() ? "rgba(77,150,255,0.15)" : "var(--surface)",
+                  border: `1.5px solid ${selectedFaceShape === name.toLowerCase() ? "#4D96FF" : "var(--border)"}`,
+                  fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 600,
+                  color: selectedFaceShape === name.toLowerCase() ? "#4D96FF" : "var(--muted)",
+                  transition: "all 0.2s",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                {emoji} {name}
+              </div>
+            ))}
           </div>
+          {selectedFaceShape && (
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(77,150,255,0.08)", borderRadius: 10, fontFamily: "var(--font-body)", fontSize: 12, color: "#4D96FF", textAlign: "center" }}>
+              ✅ {selectedFaceShape.charAt(0).toUpperCase() + selectedFaceShape.slice(1)} face selected — now click Analyze!
+            </div>
+          )}
         </div>
       )}
 
