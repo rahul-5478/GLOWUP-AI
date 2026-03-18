@@ -284,6 +284,10 @@ export default function FaceAnalysis() {
   }, []);
 
   const stopBrowserCamera = useCallback(() => {
+    if (browserStreamRef.current) {
+      browserStreamRef.current.getTracks().forEach(t => t.stop());
+      browserStreamRef.current = null;
+    }
     setBrowserCamActive(false);
   }, []);
 
@@ -319,12 +323,29 @@ export default function FaceAnalysis() {
     setCapturedJawline(null);
     setSelectedFaceShape(null);
     setShowFaceShapePicker(false);
-    setBrowserCamActive(false);
 
-    // Always use MediaPipe camera — works on both browser and native
-    // MediaPipe handles getUserMedia internally and detects face shape
-    await startCamera();
-    setBrowserCamActive(true);
+    const isNativePlatform = typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.();
+
+    if (isNativePlatform) {
+      // Native: MediaPipe handles camera + face detection
+      await startCamera();
+    } else {
+      // Browser: simple getUserMedia only (no MediaPipe conflict)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        browserStreamRef.current = stream;
+        if (browserVideoRef.current) {
+          browserVideoRef.current.srcObject = stream;
+          await browserVideoRef.current.play();
+        }
+        setBrowserCamActive(true);
+      } catch (err) {
+        setBrowserCamError("Camera permission denied. Please allow camera access.");
+      }
+    }
   };
 
   // ─── Capture from live camera ────────────────────────────────────────────────
@@ -502,11 +523,20 @@ export default function FaceAnalysis() {
         <div style={{ marginBottom: 14 }}>
           <div style={{ position: "relative", borderRadius: 20, overflow: "hidden", background: "#000", minHeight: 280 }}>
 
-            {/* MediaPipe camera — works for both browser and native */}
-            <video ref={videoRef} autoPlay playsInline muted
-              style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
-            <canvas ref={canvasRef}
-              style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
+            {/* Browser: simple getUserMedia video */}
+            {browserCamActive && (
+              <video ref={browserVideoRef} autoPlay playsInline muted
+                style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
+            )}
+            {/* Native: MediaPipe video + canvas overlay */}
+            {!browserCamActive && (
+              <>
+                <video ref={videoRef} autoPlay playsInline muted
+                  style={{ width: "100%", maxHeight: 360, objectFit: "cover", display: "block" }} />
+                <canvas ref={canvasRef}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
+              </>
+            )}
 
             {/* MediaPipe Loading */}
             {mpLoading && (
@@ -520,10 +550,10 @@ export default function FaceAnalysis() {
               </div>
             )}
 
-            {/* Face detection status */}
-            {isReady && (
-              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
-                {faceDetected ? "✅ Face Detected" : "❌ No Face — Move closer"}
+            {/* Status badge */}
+            {(isReady || browserCamActive) && (
+              <div style={{ position: "absolute", top: 12, left: 12, padding: "6px 12px", borderRadius: 20, background: browserCamActive ? "rgba(81,207,102,0.9)" : faceDetected ? "rgba(81,207,102,0.9)" : "rgba(255,107,107,0.9)", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 700, color: "#fff" }}>
+                {browserCamActive ? "✅ Camera Ready" : faceDetected ? "✅ Face Detected" : "❌ No Face — Move closer"}
               </div>
             )}
 
